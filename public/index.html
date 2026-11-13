@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#12161C">
+  <title>Lecture Rooms</title>
+  <meta name="description" content="See which lecture rooms are free right now and book one without clashes.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161C'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%23EDE6DA'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body class="is-landing">
+  <!-- Campus footage. Sources are chosen by time of day in app.js; see public/media/README.md. -->
+  <div class="stage" aria-hidden="true">
+    <div class="stage__fallback"></div>
+    <video class="stage__video" muted playsinline loop preload="none"></video>
+    <div class="stage__scrim"></div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="/">Lecture Rooms</a>
+    <span class="clock mono" data-clock></span>
+    <span class="live"><span class="live__dot"></span>LIVE</span>
+    <nav class="topbar__nav" data-signed-in hidden>
+      <span class="topbar__who" data-user-name></span>
+      <button class="link-button" type="button" data-sign-out>Sign out</button>
+    </nav>
+  </header>
+
+  <!-- Landing / sign-in ------------------------------------------------------------ -->
+  <main class="landing" data-view="landing">
+    <section class="now glass" aria-live="polite" aria-label="Rooms free right now">
+      <p class="now__count"><span class="serif now__free" data-free>–</span><span class="now__total mono" data-total></span></p>
+      <p class="now__label" data-now-label>rooms free right now</p>
+      <div class="ticker" data-ticker><div class="ticker__track mono" data-ticker-track></div></div>
+    </section>
+
+    <section class="auth glass" aria-labelledby="auth-title">
+      <form class="form" data-form="login" novalidate>
+        <h1 class="serif auth__title" id="auth-title">Sign in</h1>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Sign in</button>
+        <p class="auth__switch">New here? <button class="link-button" type="button" data-switch="register">Create a student account</button></p>
+      </form>
+
+      <form class="form" data-form="register" novalidate hidden>
+        <h1 class="serif auth__title">Create a student account</h1>
+        <label class="field">
+          <span class="field__label">Full name</span>
+          <input name="name" autocomplete="name" required minlength="2" maxlength="80">
+        </label>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="email" required>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label">Index number <em>optional</em></span>
+            <input name="indexNumber" class="mono" maxlength="30">
+          </label>
+          <label class="field">
+            <span class="field__label">Department <em>optional</em></span>
+            <input name="department" maxlength="80">
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Create account</button>
+        <p class="auth__switch">Already registered? <button class="link-button" type="button" data-switch="login">Sign in</button></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Dashboard -------------------------------------------------------------------- -->
+  <main class="dash" data-view="dashboard" hidden>
+    <div class="dash__head">
+      <h1 class="serif dash__greeting" data-greeting></h1>
+      <p class="mono dash__date" data-today></p>
+    </div>
+
+    <section class="panel glass dash__next" aria-labelledby="next-title">
+      <h2 class="panel__title" id="next-title">Your next booking</h2>
+      <div data-next></div>
+    </section>
+
+    <section class="panel glass dash__find" aria-labelledby="find-title">
+      <h2 class="panel__title" id="find-title">Find a room</h2>
+      <form class="quick" data-form="find">
+        <select name="start" aria-label="Start time" data-start-options></select>
+        <span class="quick__word">for</span>
+        <select name="duration" aria-label="How long">
+          <option value="60">1h</option>
+          <option value="120" selected>2h</option>
+          <option value="180">3h</option>
+        </select>
+        <span class="quick__word">·</span>
+        <input name="people" type="number" min="1" max="500" value="10" aria-label="Number of people" class="mono quick__people">
+        <span class="quick__word">people</span>
+        <button class="button button--primary" type="submit">Search</button>
+      </form>
+      <p class="alert" data-error hidden></p>
+      <ol class="results" data-results></ol>
+    </section>
+
+    <section class="panel glass dash__notes" aria-labelledby="notes-title">
+      <h2 class="panel__title" id="notes-title">Notifications</h2>
+      <ol class="notes" data-notes></ol>
+    </section>
+
+    <section class="panel glass dash__upcoming" aria-labelledby="upcoming-title">
+      <h2 class="panel__title" id="upcoming-title">Coming up</h2>
+      <ol class="rows" data-upcoming></ol>
+    </section>
+  </main>
+</body>
+</html>
