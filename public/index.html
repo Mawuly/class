@@ -128,5 +128,77 @@
       <ol class="rows" data-upcoming></ol>
     </section>
   </main>
+
+  <!-- Booking sheet: slides in from the right over the dimmed page ------------------- -->
+  <dialog class="sheet" data-sheet aria-labelledby="sheet-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="sheet-title" data-sheet-title>Book a room</h2>
+        <button class="link-button sheet__close" type="button" data-sheet-close>Close</button>
+      </header>
+
+      <!-- Reads like a ticket stub; updates as the form changes. -->
+      <div class="stub">
+        <p class="stub__room mono" data-stub-room></p>
+        <p class="stub__name" data-stub-name></p>
+        <div class="stub__perf" aria-hidden="true"></div>
+        <p class="stub__when mono" data-stub-when></p>
+      </div>
+
+      <form class="form sheet__form" data-form="book" novalidate>
+        <label class="field">
+          <span class="field__label">What is it for?</span>
+          <input name="title" maxlength="120" required placeholder="e.g. Data Structures lecture">
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label">Category</span>
+            <select name="category" data-category></select>
+          </label>
+          <label class="field" data-staff-only>
+            <span class="field__label">Course code <em>optional</em></span>
+            <input name="courseCode" class="mono" maxlength="20" placeholder="CSC 301">
+          </label>
+        </div>
+        <div class="field-row field-row--3">
+          <label class="field">
+            <span class="field__label">Date</span>
+            <input name="date" type="date" class="mono" required>
+          </label>
+          <label class="field">
+            <span class="field__label">From</span>
+            <select name="start" class="mono" data-sheet-start></select>
+          </label>
+          <label class="field">
+            <span class="field__label">To</span>
+            <select name="end" class="mono" data-sheet-end></select>
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">People</span>
+          <input name="attendees" type="number" min="1" class="mono" required>
+          <span class="field__hint" data-capacity-hint></span>
+        </label>
+        <label class="field">
+          <span class="field__label">Notes <em>optional</em></span>
+          <textarea name="notes" rows="2" maxlength="500"></textarea>
+        </label>
+
+        <div class="clash" data-clash hidden role="alert">
+          <p class="clash__msg" data-clash-msg></p>
+          <button class="button button--ink" type="button" data-suggest hidden></button>
+        </div>
+        <p class="alert" data-error hidden></p>
+
+        <p class="sheet__policy" data-policy></p>
+        <div class="sheet__actions">
+          <button class="button button--primary" type="submit" data-sheet-submit>Book</button>
+          <button class="button button--secondary" type="button" data-sheet-close>Cancel</button>
+        </div>
+      </form>
+
+      <div class="sheet__done" data-done hidden aria-live="polite"></div>
+    </div>
+  </dialog>
 </body>
 </html>

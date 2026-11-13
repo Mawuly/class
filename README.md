@@ -13,8 +13,10 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
 - Free-room finder (smallest suitable room first), day board and room week API
 - Admin approval queue with approve and reject, in-app notifications, audit log
 - "Campus Now" landing page with live room counts and ticker, sign-in and register, and a first dashboard
+- Booking sheet: book or request a room from the search results; clashes are shown inline with a one-click
+  "Try 10:00–12:00?" suggestion; bookings can be cancelled from the dashboard
 
-Next: booking sheet, day board and week view pages, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
+Next: day board and week view pages, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally
 

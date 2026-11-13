@@ -1,35 +1,10 @@
 import { api } from './api.js';
-
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-
-/** Builds an element. Text is always set with textContent, so nothing from the server is parsed as HTML. */
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') el.className = v;
-    else el.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of children.flat()) {
-    if (c == null || c === false) continue;
-    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
-  }
-  return el;
-}
+import { openSheet } from './sheet.js';
+import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const pad = (n) => String(n).padStart(2, '0');
-const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-const fromMin = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
 
-function longDate(iso) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-const state = { user: null, meta: null };
+const state = { user: null, meta: null, search: null };
 
 /* ---------- Clock ------------------------------------------------------------------ */
 
@@ -110,12 +85,6 @@ async function refreshNow() {
 
 /* ---------- Sign in / register ------------------------------------------------------ */
 
-function showError(form, message) {
-  const el = $('[data-error]', form);
-  el.textContent = message || '';
-  el.hidden = !message;
-}
-
 function switchForm(name) {
   for (const f of $$('.auth form')) f.hidden = f.dataset.form !== name;
   $(`[data-form="${name}"] input`).focus();
@@ -195,18 +164,45 @@ function renderNext(bookings) {
   );
 }
 
+/** Cancel needs a second click within a few seconds, so a stray tap cannot drop a booking. */
+function cancelButton(b) {
+  let armed = null;
+  const button = h('button', { class: 'link-button row__cancel', type: 'button', 'aria-label': `Cancel ${b.title} in ${b.room_code}` }, 'Cancel');
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      button.textContent = 'Confirm cancel?';
+      armed = setTimeout(() => { armed = null; button.textContent = 'Cancel'; }, 4000);
+      return;
+    }
+    clearTimeout(armed);
+    button.disabled = true;
+    try {
+      await api(`/bookings/${b.id}/cancel`, { method: 'POST' });
+      await refreshAfterChange();
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = err.message;
+    }
+  });
+  return button;
+}
+
 function bookingRow(b) {
   return h('li', { class: `row row--${b.status}` },
     h('span', { class: 'mono row__room' }, b.room_code),
     h('span', { class: 'row__title' }, b.status === 'approved' ? h('span', { class: 'mine-mark', 'aria-hidden': 'true' }, '■ ') : '', b.title),
     h('span', { class: 'mono row__when' }, `${longDate(b.date)} ${b.start_time}–${b.end_time}`),
-    h('span', { class: `tag tag--${b.status}` }, b.status));
+    h('span', { class: 'row__side' },
+      h('span', { class: `tag tag--${b.status}` }, b.status === 'pending' ? 'awaiting approval' : b.status),
+      ['pending', 'approved'].includes(b.status) ? cancelButton(b) : ''));
 }
 
 function renderUpcoming(bookings) {
   const list = $('[data-upcoming]');
-  list.replaceChildren(...(bookings.length
-    ? bookings.slice(0, 8).map(bookingRow)
+  // Rejections stay visible so students see the outcome; your own cancellations are just clutter.
+  const shown = bookings.filter((b) => b.status !== 'cancelled');
+  list.replaceChildren(...(shown.length
+    ? shown.slice(0, 8).map(bookingRow)
     : [h('li', { class: 'muted' }, 'No upcoming bookings.')]));
 }
 
@@ -232,11 +228,20 @@ async function findRooms(form) {
   try {
     const q = new URLSearchParams({ date, start, end, minCapacity: people });
     const { rooms } = await api(`/rooms/available?${q}`);
+    state.search = { date, start, end, attendees: people };
     list.replaceChildren(...(rooms.length
       ? rooms.slice(0, 8).map((r) => h('li', { class: 'result' },
         h('span', { class: 'result__code mono' }, r.code),
         h('span', { class: 'result__where' }, r.name, h('small', {}, r.building_name)),
         h('span', { class: 'result__cap mono' }, `${r.capacity} seats`),
+        h('button', {
+          class: 'button button--secondary result__book',
+          type: 'button',
+          'aria-label': `Book ${r.code}, ${start}–${end}`,
+          onclick: () => openSheet(r, state.search, {
+            user: state.user, rules: state.meta.rules, onBooked: refreshAfterChange,
+          }),
+        }, 'Book'),
         h('span', { class: 'result__fac mono' }, r.facilities.map((f) => f.replace('_', ' ')).join(' · ')),
         r.bestFit ? h('span', { class: 'result__fit' }, `Best fit for ${people}`) : ''))
       : [h('li', { class: 'muted' }, `No room fits ${people} people ${start}–${end}. Try a shorter slot or fewer people.`)]));
@@ -244,6 +249,12 @@ async function findRooms(form) {
     list.replaceChildren();
     showError(form.parentElement, err.message);
   }
+}
+
+/** After a booking or cancellation: reload my bookings and re-run the last search. */
+async function refreshAfterChange() {
+  await loadDashboard();
+  if (state.search) await findRooms($('[data-form="find"]'));
 }
 
 async function loadDashboard() {
