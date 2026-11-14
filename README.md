@@ -75,6 +75,20 @@ The tests empty and refill the `rooms_test` database (or `DATABASE_URL_TEST`). N
    | `ALLOWED_EMAIL_DOMAIN` | Optional, e.g. `ug.edu.gh` |
 5. Deploy. Vercel serves `public/` from its CDN, and every `/api/*` request goes to `api/index.js` (see `vercel.json`).
 
+### If the deployed site shows an error
+
+Open `https://<your-site>.vercel.app/api/health`. It says in plain words what is wrong:
+
+| It says | Fix |
+|---|---|
+| `JWT_SECRET is not set` / `DATABASE_URL is not set` | Add it under Vercel → Settings → Environment Variables (tick Production **and** Preview), then **Redeploy**. Variables only reach new deployments. |
+| `Could not reach the database` | You used the direct connection (`db.<ref>.supabase.co`). Vercel can't reach it; use the **Transaction pooler** string (port 6543). |
+| `Wrong database password` | Reset it in Supabase. Symbols in the password must be URL-encoded (`@` → `%40`, `#` → `%23`, `/` → `%2F`). |
+| `did not recognise the user` | With the pooler the user is `postgres.<project-ref>`, not `postgres`. |
+| `tables do not exist` / `rooms table is empty` | Run step 2 above. |
+
+`"ok": true` means the server is configured and connected. For anything else, check Vercel → Deployments → (latest) → Logs.
+
 ### Notes for Supabase
 
 - **Row Level Security is switched on for every table with no policies.** Supabase exposes tables in `public`

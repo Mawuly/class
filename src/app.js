@@ -7,6 +7,7 @@ const config = require('./config');
 const { authenticate } = require('./middleware/auth');
 const { requireXhr } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
+const { AppError } = require('./utils/errors');
 
 const app = express();
 
@@ -36,6 +37,13 @@ app.use(cookieParser());
 
 const api = express.Router();
 api.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+api.use('/health', require('./routes/health'));
+// With settings missing, answer clearly instead of crashing (the page itself still loads).
+api.use((req, res, next) => {
+  if (!config.problems.length) return next();
+  next(new AppError(503, `The server is not set up yet: ${config.problems.join('; ')}. `
+    + 'Add the missing settings in Vercel → Settings → Environment Variables, then redeploy.'));
+});
 api.use(requireXhr);
 api.use(authenticate);
 api.use('/public', require('./routes/public'));
@@ -47,11 +55,9 @@ api.use('/notifications', require('./routes/notifications'));
 api.use(notFound);
 app.use('/api', api);
 
-// On Vercel, files in public/ are served by the CDN before reaching this function.
-// Locally, Express serves them itself.
-if (!process.env.VERCEL) {
-  app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'] }));
-}
+// On Vercel the CDN normally serves public/ before a request reaches this function;
+// serving it here as well means the site still works if every request is routed to Express.
+app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'] }));
 
 app.use(notFound);
 app.use(errorHandler);

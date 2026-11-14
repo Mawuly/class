@@ -257,3 +257,13 @@ describe('rooms', () => {
     assert.ok(!JSON.stringify(res.body).includes('@'));
   });
 });
+
+describe('health', () => {
+  test('reports a working database without signing in', async () => {
+    await resetDb();
+    const res = await agent().get('/api/health');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.match(res.body.database, /connected, 16 rooms/);
+  });
+});

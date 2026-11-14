@@ -16,7 +16,12 @@ const pool = new Pool({
   // Each Vercel function instance keeps a tiny pool; Supabase's pooler does the real pooling.
   max: config.isProd ? 3 : 10,
   idleTimeoutMillis: 10_000,
+  // Fail fast (well inside Vercel's 10-second limit) when the database cannot be reached.
+  connectionTimeoutMillis: 5_000,
 });
+
+// Without a listener, a dropped idle connection raises an unhandled 'error' event and kills the process.
+pool.on('error', (err) => console.error('[db] idle connection error:', err.code || err.message));
 
 /** Lets queries use "?" placeholders, numbered here as Postgres's $1, $2, ... */
 function numbered(sql) {
