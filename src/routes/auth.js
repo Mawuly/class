@@ -49,11 +49,13 @@ router.post('/register', authLimiter, async (req, res) => {
   const hash = await bcrypt.hash(password, config.bcryptCost);
   let user;
   try {
-    // Everyone who registers is a student; only an admin can grant other roles.
+    // Everyone who registers is a student, except emails listed in ADMIN_EMAILS (set by the
+    // site owner in Vercel). Only an admin can grant other roles.
+    const role = config.adminEmails.includes(email) ? 'admin' : 'student';
     user = await db.get(
-      `INSERT INTO users (name, email, password_hash, department, index_number)
-       VALUES (?, ?, ?, ?, ?) RETURNING id, name, email, role, department, index_number`,
-      [name, email, hash, department, indexNumber],
+      `INSERT INTO users (name, email, password_hash, role, department, index_number)
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id, name, email, role, department, index_number`,
+      [name, email, hash, role, department, indexNumber],
     );
   } catch (err) {
     if (err.code === '23505') throw new AppError(409, 'An account with that email already exists');
@@ -77,6 +79,12 @@ router.post('/login', authLimiter, async (req, res) => {
   if (!user || !ok || !user.is_active) {
     await audit({ userId: user?.id ?? null, action: 'auth.login_failed', details: { email: email.slice(0, 254) }, ip: req.ip });
     throw new AppError(401, 'Email or password is incorrect');
+  }
+  if (config.adminEmails.includes(user.email.toLowerCase()) && user.role !== 'admin') {
+    // Registered before their email was added to ADMIN_EMAILS.
+    await db.run("UPDATE users SET role = 'admin' WHERE id = ?", [user.id]);
+    await audit({ userId: user.id, action: 'user.promote_admin', entity: 'user', entityId: user.id, details: { via: 'ADMIN_EMAILS' }, ip: req.ip });
+    user.role = 'admin';
   }
   await audit({ userId: user.id, action: 'auth.login', ip: req.ip });
   setSession(res, user);

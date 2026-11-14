@@ -55,25 +55,35 @@ npm test
 
 The tests empty and refill the `rooms_test` database (or `DATABASE_URL_TEST`). Never point that at real data.
 
-## Deploy: Supabase + Vercel
+## Deploy: Supabase + Vercel (no terminal needed)
 
-1. **Create a Supabase project.** Note the database password.
-2. **Create the tables.** In Supabase, open **Connect** and copy the **Session pooler** connection string (port 5432). Then run, once:
-   ```bash
-   DATABASE_URL="<session pooler string>" npm run db:seed:rooms
-   ```
-   This creates the schema and the buildings and rooms, but no demo users. Use `npm run db:seed` instead if you want the demo accounts on a test deployment. Edit `src/db/seed.js` with your campus's real rooms first.
-3. **Make yourself an admin.** Register on the deployed site, then in the Supabase SQL editor:
-   ```sql
-   update users set role = 'admin' where email = 'you@your-university.edu.gh';
-   ```
-4. **Import the repository into Vercel** (framework preset: Other). Add these environment variables:
-   | Name | Value |
-   |---|---|
-   | `DATABASE_URL` | The **Transaction pooler** string from Supabase → Connect (port 6543) |
-   | `JWT_SECRET` | A long random string |
-   | `ALLOWED_EMAIL_DOMAIN` | Optional, e.g. `ug.edu.gh` |
-5. Deploy. Vercel serves `public/` from its CDN, and every `/api/*` request goes to `api/index.js` (see `vercel.json`).
+Everything happens in the two websites. The app creates its own tables and rooms the first
+time it meets an empty database.
+
+1. **Supabase:** create a project at supabase.com. Note the database password.
+2. **Vercel:** import the `lilcrips/class` repository (Add New → Project). Leave the build settings as they are.
+3. **Connect the database**, either way:
+   - **Easiest:** in your Vercel project open **Storage → Connect Database → Supabase** and pick your
+     project. Vercel adds the connection settings itself.
+   - **Or by hand:** in Supabase click **Connect**, copy the **Transaction pooler** string (port 6543,
+     host ends in `pooler.supabase.com`), put your password in place of `[YOUR-PASSWORD]`, and add it in
+     Vercel → Settings → Environment Variables as `DATABASE_URL`.
+4. **Make yourself the admin:** in Vercel → Settings → Environment Variables add `ADMIN_EMAILS` with your
+   email address (several can be separated by commas).
+5. **Redeploy** (Deployments → latest → ⋯ → Redeploy). Settings only reach deployments made after you add them.
+6. Open `https://<your-site>.vercel.app/api/health`. When it shows `"ok": true`, open the site and
+   **register with the email from step 4**. You are now the admin.
+
+Optional settings (Vercel → Settings → Environment Variables):
+
+| Name | What it does |
+|---|---|
+| `SEED_DEMO` | `true` adds demo lecturers, a demo student (`student@campus.test` / `Campus2026`) and sample bookings to an empty database. No demo admin is ever created on a deployment. |
+| `ALLOWED_EMAIL_DOMAIN` | e.g. `ug.edu.gh`: only addresses at that domain can register. |
+| `JWT_SECRET` | A long random string for signing logins. Optional: without it, one is derived from the database connection string. |
+
+To change the rooms to your campus's real ones, edit the lists at the top of `src/db/seed.js`
+(you can do that on github.com) **before** the first deploy, or later in Supabase's Table Editor.
 
 ### If the deployed site shows an error
 
@@ -81,11 +91,11 @@ Open `https://<your-site>.vercel.app/api/health`. It says in plain words what is
 
 | It says | Fix |
 |---|---|
-| `JWT_SECRET is not set` / `DATABASE_URL is not set` | Add it under Vercel → Settings → Environment Variables (tick Production **and** Preview), then **Redeploy**. Variables only reach new deployments. |
+| `No database is connected` | Do step 3, then redeploy. |
 | `Could not reach the database` | You used the direct connection (`db.<ref>.supabase.co`). Vercel can't reach it; use the **Transaction pooler** string (port 6543). |
 | `Wrong database password` | Reset it in Supabase. Symbols in the password must be URL-encoded (`@` → `%40`, `#` → `%23`, `/` → `%2F`). |
 | `did not recognise the user` | With the pooler the user is `postgres.<project-ref>`, not `postgres`. |
-| `tables do not exist` / `rooms table is empty` | Run step 2 above. |
+| `No admin yet` | Do step 4, redeploy, then register (or sign in) with that email. |
 
 `"ok": true` means the server is configured and connected. For anything else, check Vercel → Deployments → (latest) → Logs.
 
@@ -95,7 +105,10 @@ Open `https://<your-site>.vercel.app/api/health`. It says in plain words what is
   through its REST API to anyone holding the public anon key; with RLS on and no policies, that API returns
   nothing. The app connects directly as the table owner, so it is not affected. Do not add policies unless
   you mean to expose data.
-- The app uses Supabase only as a Postgres database. It does not use Supabase Auth or the Supabase JS client.
+- The app uses Supabase only as a Postgres database.
+- The connection string's `sslmode=require` option is removed on purpose: node-postgres would otherwise
+  demand a certificate chain Supabase's pooler doesn't send, and every connection would fail. The
+  connection is still encrypted. It does not use Supabase Auth or the Supabase JS client.
 
 ### Notes for Vercel
 

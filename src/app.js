@@ -8,6 +8,7 @@ const { authenticate } = require('./middleware/auth');
 const { requireXhr } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { AppError } = require('./utils/errors');
+const { ensureReady } = require('./db/setup');
 
 const app = express();
 
@@ -41,8 +42,12 @@ api.use('/health', require('./routes/health'));
 // With settings missing, answer clearly instead of crashing (the page itself still loads).
 api.use((req, res, next) => {
   if (!config.problems.length) return next();
-  next(new AppError(503, `The server is not set up yet: ${config.problems.join('; ')}. `
-    + 'Add the missing settings in Vercel → Settings → Environment Variables, then redeploy.'));
+  next(new AppError(503, `The server is not set up yet. ${config.problems.join('. ')}. Then redeploy.`));
+});
+// First request on a fresh database creates the tables and rooms (see db/setup.js).
+api.use(async (req, res, next) => {
+  await ensureReady();
+  next();
 });
 api.use(requireXhr);
 api.use(authenticate);

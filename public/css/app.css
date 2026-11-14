@@ -217,6 +217,8 @@ select option { background: var(--ink); color: var(--bone); }
 .now__free { font-size: clamp(64px, 9vw, 104px); line-height: .9; letter-spacing: -0.03em; }
 .now__total { font-size: 20px; color: var(--text-muted); }
 .now__label { margin-top: 6px; font-size: 16px; }
+.now__label--problem { font-size: 14px; color: var(--text-strong); }
+.now__label--problem::before { content: '⚠ '; font-family: var(--mono); }
 
 .ticker {
   margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line);

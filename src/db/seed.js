@@ -54,10 +54,15 @@ const DEMO_USERS = [
   ['Kofi Asante', 'student@campus.test', 'student', 'Computer Science'],
 ];
 
-/** Demo accounts and a spread of bookings for today and tomorrow, for local development only. */
-async function seedDemo(db) {
+/**
+ * Demo accounts and a spread of bookings for today and tomorrow. Pass a transaction.
+ * includeAdmin is only for local development: a deployed site must never have an admin
+ * whose password is printed in the README.
+ */
+async function seedDemo(db, { includeAdmin = true } = {}) {
   const hash = await bcrypt.hash(DEMO_PASSWORD, config.bcryptCost);
   for (const [name, email, role, department] of DEMO_USERS) {
+    if (role === 'admin' && !includeAdmin) continue;
     await db.run(
       `INSERT INTO users (name, email, password_hash, role, department) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (lower(email)) DO NOTHING`,
@@ -71,7 +76,6 @@ async function seedDemo(db) {
   const lecturer = await id('SELECT id FROM users WHERE email = ?', 'lecturer@campus.test');
   const yaw = await id('SELECT id FROM users WHERE email = ?', 'yaw.boateng@campus.test');
   const efua = await id('SELECT id FROM users WHERE email = ?', 'efua.owusu@campus.test');
-  const admin = await id('SELECT id FROM users WHERE email = ?', 'admin@campus.test');
   const student = await id('SELECT id FROM users WHERE email = ?', 'student@campus.test');
   const today = localDate();
   const tomorrow = addDays(today, 1);
@@ -83,20 +87,18 @@ async function seedDemo(db) {
     ['LT-2', yaw, 'Discrete Mathematics', 'lecture', 'MATH 221', today, '10:30', '12:30', 180, 'approved'],
     ['SCB-101', efua, 'Web Development Lab', 'lab', 'CSC 305', today, '09:00', '12:00', 55, 'approved'],
     ['SCB-104', efua, 'Research Methods Tutorial', 'tutorial', 'CSC 401', today, '15:00', '17:00', 30, 'approved'],
-    ['NAB-001', admin, 'Faculty Assembly', 'event', null, today, '16:00', '18:00', 200, 'approved'],
+    ['NAB-001', yaw, 'Faculty Assembly', 'event', null, today, '16:00', '18:00', 200, 'approved'],
     ['LIB-S3', student, 'Final-year project group', 'meeting', null, today, '14:00', '16:00', 6, 'approved'],
     ['LIB-S1', student, 'Exam revision', 'study', null, tomorrow, '10:00', '12:00', 4, 'pending'],
     ['LT-2', lecturer, 'Software Engineering', 'lecture', 'CSC 303', tomorrow, '08:30', '10:30', 190, 'approved'],
   ];
-  await db.tx(async (x) => {
-    for (const [room, user, title, category, course, date, start, end, attendees, status] of rows) {
-      await x.run(
-        `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, status)
-         VALUES ((SELECT id FROM rooms WHERE code = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [room, user, title, category, course, date, start, end, attendees, status],
-      );
-    }
-  });
+  for (const [room, user, title, category, course, date, start, end, attendees, status] of rows) {
+    await db.run(
+      `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, status)
+       VALUES ((SELECT id FROM rooms WHERE code = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [room, user, title, category, course, date, start, end, attendees, status],
+    );
+  }
 }
 
 module.exports = { seedReference, seedDemo, DEMO_PASSWORD };
@@ -108,7 +110,7 @@ if (require.main === module) {
   (async () => {
     await migrate(db);
     await seedReference(db);
-    if (withDemo) await seedDemo(db);
+    if (withDemo) await db.tx((x) => seedDemo(x));
     console.log(withDemo
       ? `Seeded. Demo logins (password ${DEMO_PASSWORD}): admin@ / lecturer@ / student@campus.test`
       : 'Seeded buildings and rooms.');

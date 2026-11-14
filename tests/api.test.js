@@ -267,3 +267,55 @@ describe('health', () => {
     assert.match(res.body.database, /connected, 16 rooms/);
   });
 });
+
+describe('zero-step setup', () => {
+  const { resetSetupState } = require('../src/db/setup');
+
+  test('a brand-new empty database gets its tables and rooms on the first request', async () => {
+    await db.pool.query(`DROP TABLE IF EXISTS audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    resetSetupState();
+    const res = await agent().get('/api/public/now');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.total, 16);
+    const health = await agent().get('/api/health');
+    assert.equal(health.body.ok, true);
+    assert.match(health.body.database, /16 rooms, 0 admins/);
+    assert.match(health.body.next, /Register on the site with boss@campus.test/);
+  });
+
+  test('setup runs safely when several requests arrive at once', async () => {
+    await db.pool.query(`DROP TABLE IF EXISTS audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    resetSetupState();
+    const results = await Promise.all([1, 2, 3, 4].map(() => agent().get('/api/public/now')));
+    assert.deepEqual(results.map((r) => r.status), [200, 200, 200, 200]);
+    const { n } = await db.get('SELECT count(*)::int AS n FROM rooms');
+    assert.equal(n, 16);
+  });
+
+  test('registering with an ADMIN_EMAILS address makes you admin; others stay students', async () => {
+    await resetDb();
+    const boss = await agent().post('/api/auth/register').send({ name: 'Boss', email: 'boss@campus.test', password: PASSWORD });
+    assert.equal(boss.body.user.role, 'admin');
+    const other = await agent().post('/api/auth/register').send({ name: 'Other', email: 'other@campus.test', password: PASSWORD });
+    assert.equal(other.body.user.role, 'student');
+  });
+
+  test('an existing account is promoted when its email is in ADMIN_EMAILS', async () => {
+    await resetDb();
+    await agent().post('/api/auth/register').send({ name: 'Head', email: 'head@campus.test', password: PASSWORD });
+    await db.run("UPDATE users SET role = 'student' WHERE email = 'head@campus.test'");
+    const login = await agent().post('/api/auth/login').send({ email: 'head@campus.test', password: PASSWORD });
+    assert.equal(login.body.user.role, 'admin');
+  });
+});
+
+describe('connection strings', () => {
+  const { cleanDatabaseUrl } = require('../src/config');
+
+  test("Supabase's sslmode and pooler flags are removed; the password is kept intact", () => {
+    const url = 'postgres://postgres.abc:p%40ss%23w0rd@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x';
+    const clean = cleanDatabaseUrl(url);
+    assert.equal(clean, 'postgres://postgres.abc:p%40ss%23w0rd@aws-0-eu-central-1.pooler.supabase.com:6543/postgres');
+    assert.equal(cleanDatabaseUrl('postgres://u:p@h:5432/db?pgbouncer=true'), 'postgres://u:p@h:5432/db');
+  });
+});

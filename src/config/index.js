@@ -9,16 +9,56 @@ const env = process.env.NODE_ENV || 'development';
 const isProd = env === 'production' || Boolean(process.env.VERCEL_ENV);
 const isTest = env === 'test';
 
+const LOCAL = 'postgres://postgres:postgres@localhost:5432';
+
+/**
+ * Removes connection-string options that node-postgres would misread. Supabase's
+ * "sslmode=require" makes pg demand a certificate chain Supabase's pooler does not
+ * provide, so the connection fails; TLS is configured in db/index.js instead.
+ */
+function cleanDatabaseUrl(raw) {
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    for (const key of ['sslmode', 'sslrootcert', 'supa', 'pgbouncer', 'connection_limit']) url.searchParams.delete(key);
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
+// DATABASE_URL if you set it yourself; POSTGRES_URL / POSTGRES_PRISMA_URL are what Vercel's
+// Supabase integration (Vercel → Storage → Supabase) adds automatically.
+const productionDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '';
+
+const databaseUrl = cleanDatabaseUrl(isTest
+  ? process.env.DATABASE_URL_TEST || `${LOCAL}/rooms_test`
+  : productionDbUrl || `${LOCAL}/rooms_dev`);
+
+/**
+ * JWT_SECRET is optional. Without it, the signing key is derived from the database URL,
+ * which already contains the database password: secret, and the same on every Vercel
+ * instance. Changing the database password then signs everyone out, which is harmless.
+ */
+function jwtSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (!isProd) return 'dev-only-secret-do-not-use-in-production';
+  if (productionDbUrl) return crypto.createHmac('sha256', productionDbUrl).update('lecture-rooms/jwt').digest('hex');
+  return crypto.randomBytes(48).toString('hex'); // unusable anyway: the API refuses requests without a database
+}
+
 // Missing settings must not crash the server: a crash on Vercel shows a bare
 // "FUNCTION_INVOCATION_FAILED" page. Instead the API refuses requests with a clear
 // message (see app.js) and /api/health lists what is missing.
 const problems = [];
-if (isProd && !process.env.JWT_SECRET) problems.push('JWT_SECRET is not set');
-if (isProd && !process.env.DATABASE_URL) problems.push('DATABASE_URL is not set');
+if (isProd && !productionDbUrl) {
+  problems.push('No database is connected. In Vercel open Storage and connect your Supabase project, '
+    + 'or add DATABASE_URL (Supabase → Connect → Transaction pooler) under Settings → Environment Variables');
+}
 if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) problems.push('JWT_SECRET is shorter than 32 characters');
-for (const p of problems) console.error(`[config] ${p}. Add it in Vercel → Project → Settings → Environment Variables, then redeploy.`);
+for (const p of problems) console.error(`[config] ${p}. Then redeploy.`);
 
-const LOCAL = 'postgres://postgres:postgres@localhost:5432';
+const list = (v) => String(v || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 module.exports = {
   env,
@@ -26,16 +66,17 @@ module.exports = {
   isTest,
   problems,
   port: Number(process.env.PORT) || 3000,
-  // Supabase Postgres in production; a local Postgres in development and tests.
-  databaseUrl: isTest
-    ? process.env.DATABASE_URL_TEST || `${LOCAL}/rooms_test`
-    : process.env.DATABASE_URL || `${LOCAL}/rooms_dev`,
+  databaseUrl,
+  hasDatabaseUrl: Boolean(productionDbUrl) || !isProd,
+  cleanDatabaseUrl,
   // Optional: Supabase's CA certificate (Project Settings → Database → SSL) so TLS is verified.
   databaseCa: process.env.DATABASE_CA || '',
-  // In production without a secret, use a random one so a guessable default is never used.
-  jwtSecret: process.env.JWT_SECRET
-    || (isProd ? crypto.randomBytes(48).toString('hex') : 'dev-only-secret-do-not-use-in-production'),
+  jwtSecret: jwtSecret(),
   jwtTtlSeconds: 8 * 60 * 60,
+  // Whoever registers or signs in with one of these emails becomes an admin. Comma-separated.
+  adminEmails: list(process.env.ADMIN_EMAILS),
+  // SEED_DEMO=true adds demo lecturers, a demo student and sample bookings (never a demo admin).
+  seedDemo: /^(1|true|yes)$/i.test(process.env.SEED_DEMO || ''),
   // e.g. "ug.edu.gh" — leave empty to allow any email address
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,

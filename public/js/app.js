@@ -54,9 +54,15 @@ async function refreshNow() {
   let data;
   try {
     data = await api('/public/now');
-  } catch {
-    return; // keep showing the last numbers
+  } catch (err) {
+    // A setup problem (503) is worth showing: it tells the site owner exactly what to fix.
+    if (err.status === 503) {
+      $('[data-now-label]').textContent = err.message;
+      $('[data-now-label]').classList.add('now__label--problem');
+    }
+    return; // otherwise keep showing the last numbers
   }
+  $('[data-now-label]').classList.remove('now__label--problem');
   $('[data-total]').textContent = ` / ${data.total}`;
   if (data.isOpen) {
     $('[data-free]').textContent = data.free;
