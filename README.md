@@ -26,7 +26,7 @@ Every feature in the project plan is built.
 **Accounts and security**
 - Staff verification: lecturers and admins upload an offer or appointment letter, checked by an admin; the letter is deleted after the decision and only its SHA-256 fingerprint is kept
 - Passwords hashed with bcrypt; sessions in an `httpOnly` cookie; every login token carries a session version, so a reset or password change signs out every device
-- Forgot password via the timetable office; one-time temporary passwords valid 72 hours; a new password is required before anything else works
+- Forgot password by a 6-digit code sent to your email (valid 10 minutes, 5 tries, newest code only, at most one a minute and five an hour, stored as a keyed hash); without email set up, through the timetable office with a one-time temporary password
 - **Double booking is impossible at the database level:** Postgres exclusion constraints per room and per person
 - The audit log is append-only: a database trigger refuses any change or deletion
 - CSRF header check, rate-limited sign-in, strict Content Security Policy, Row Level Security on every table
@@ -100,6 +100,35 @@ Optional settings (Vercel → Settings → Environment Variables):
 To use your campus's real rooms, sign in as admin and open **Rooms**: add your buildings and rooms,
 and delete the demo ones (any demo room that was never booked can be deleted; booked ones can be
 deactivated).
+
+### Optional: password reset codes by email
+
+"Forgot your password?" sends a 6-digit code by email once you give the app an email account to send
+from. Without these settings it falls back to telling the timetable office, who reset passwords in
+person. `/api/health` shows which one your site uses.
+
+**Gmail (free, about 500 emails a day):**
+1. Use a Gmail account for the app (a new one like `lecturerooms.noreply@gmail.com` is best).
+2. Turn on 2-Step Verification for it, then create an **App password** (Google Account → Security →
+   App passwords). Google shows a 16-letter password once.
+3. In Vercel → Settings → Environment Variables add:
+
+| Name | Value |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USER` | the Gmail address |
+| `SMTP_PASS` | the 16-letter app password (no spaces) |
+| `MAIL_FROM` | `Lecture Rooms <the Gmail address>` |
+
+4. Redeploy, then try "Forgot your password?" with your own account.
+
+**Brevo** (free, 300 a day) works the same way with `smtp-relay.brevo.com`, port `587`, and the SMTP
+login and key from Brevo → SMTP & API; verify your sender address there first. A university mail
+server works too: ask IT for its SMTP host, port and an account.
+
+Codes are never shown in Vercel's logs. On your own computer, without SMTP settings, codes are printed
+in the terminal running `npm run dev` instead of being emailed.
 
 ### If the deployed site shows an error
 

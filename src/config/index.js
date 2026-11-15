@@ -77,6 +77,15 @@ module.exports = {
   adminEmails: list(process.env.ADMIN_EMAILS),
   // SEED_DEMO=true adds demo lecturers, a demo student and sample bookings (never a demo admin).
   seedDemo: /^(1|true|yes)$/i.test(process.env.SEED_DEMO || ''),
+  // Email for password reset codes (SMTP). With these unset, "Forgot password" falls back to
+  // telling the timetable office. In development and tests, codes are not sent (see services/mail.js).
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT) || 587,
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.MAIL_FROM || process.env.SMTP_USER || '',
+  },
   // e.g. "ug.edu.gh" — leave empty to allow any email address
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,

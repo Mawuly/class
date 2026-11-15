@@ -12,8 +12,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 // is brought up to date by running the whole file again once.
 //   1: first release   2: access_requests (staff verification) and app_meta
 //   3: password reset columns on users   4: append-only audit log, audit indexes
-//   5: calendar subscription token on users
-const SCHEMA_VERSION = 5;
+//   5: calendar subscription token on users   6: password_resets (emailed codes)
+const SCHEMA_VERSION = 6;
 
 let ready = null;
 

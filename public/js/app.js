@@ -106,8 +106,17 @@ function switchForm(name) {
   if (name === 'forgot') {
     $('[data-forgot-done]').hidden = true;
     $('[data-form="forgot"] [name=email]').value = $('[data-form="login"] [name=email]').value;
+    showResetMethod();
   }
   $(`[data-form="${name}"] input`).focus();
+}
+
+/** Explains the right steps: a code by email, or the timetable office if email isn't set up. */
+async function showResetMethod() {
+  state.resetOptions ??= await api('/auth/options').catch(() => ({ resetByEmail: false }));
+  const byEmail = state.resetOptions.resetByEmail;
+  for (const el of $$('[data-reset-by]')) el.hidden = el.dataset.resetBy !== (byEmail ? 'email' : 'office');
+  $('[data-forgot-submit]').textContent = byEmail ? 'Send me a code' : 'Tell the timetable office';
 }
 
 async function submitAuth(form, path) {
@@ -509,11 +518,77 @@ async function submitForgot(form) {
   const button = $('button[type="submit"]', form);
   button.disabled = true;
   try {
-    await api('/auth/forgot-password', { method: 'POST', body: { email } });
+    const r = await api('/auth/forgot-password', { method: 'POST', body: { email } });
+    if (r.method === 'code') {
+      openCodeStep(email, r.minutes);
+      return;
+    }
     const done = $('[data-forgot-done]', form);
     done.textContent = `Done. If ${email} has an account, the timetable office has been told. `
       + 'Visit or call them with your ID card to get a temporary password.';
     done.hidden = false;
+  } catch (err) {
+    showError(form, err.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/* Step 2 of a reset by email. The "send a new code" link waits a minute, as the server does. */
+function openCodeStep(email, minutes) {
+  state.resetEmail = email;
+  const form = $('[data-form="reset-code"]');
+  form.reset();
+  showError(form, '');
+  $('[data-code-sent]', form).textContent = `If ${email} has an account, we’ve sent it a 6-digit code. `
+    + `It works for ${minutes} minutes. Enter it with your new password.`;
+  switchForm('reset-code');
+  startResendWait();
+}
+
+function startResendWait() {
+  const link = $('[data-resend]');
+  clearInterval(state.resendTimer);
+  let left = 60;
+  link.disabled = true;
+  link.textContent = `send a new code in ${left} s`;
+  state.resendTimer = setInterval(() => {
+    left -= 1;
+    if (left > 0) { link.textContent = `send a new code in ${left} s`; return; }
+    clearInterval(state.resendTimer);
+    link.disabled = false;
+    link.textContent = 'send a new code';
+  }, 1000);
+}
+
+async function resendCode() {
+  const form = $('[data-form="reset-code"]');
+  showError(form, '');
+  try {
+    await api('/auth/forgot-password', { method: 'POST', body: { email: state.resetEmail } });
+    $('[data-code-sent]', form).textContent = `We’ve sent a new code to ${state.resetEmail}, if it has an account. `
+      + 'Only the newest code works.';
+    startResendWait();
+  } catch (err) {
+    showError(form, err.message);
+  }
+}
+
+async function submitCode(form) {
+  showError(form, '');
+  const code = form.code.value.replace(/\D/g, '');
+  if (code.length !== 6) { showError(form, 'Enter the 6 digits from the email'); form.code.focus(); return; }
+  const problem = passwordProblem(form.newPassword.value, form.repeat.value);
+  if (problem) { showError(form, problem); return; }
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  try {
+    const { user } = await api('/auth/reset-password', {
+      method: 'POST', body: { email: state.resetEmail, code, newPassword: form.newPassword.value },
+    });
+    clearInterval(state.resendTimer);
+    form.reset();
+    await enterApp(user);
   } catch (err) {
     showError(form, err.message);
   } finally {
@@ -656,6 +731,13 @@ function init() {
     });
   }
   $('[data-form="forgot"]').addEventListener('submit', (e) => { e.preventDefault(); submitForgot(e.target); });
+  $('[data-form="reset-code"]').addEventListener('submit', (e) => { e.preventDefault(); submitCode(e.target); });
+  $('[data-resend]').addEventListener('click', resendCode);
+  // Typing or pasting "482913" shows as "482 913", easier to compare with the email.
+  $('[data-form="reset-code"] [name=code]').addEventListener('input', (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+    e.target.value = digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
+  });
   $('[data-form="new-password"]').addEventListener('submit', (e) => { e.preventDefault(); submitNewPassword(e.target); });
   $('[data-account]').addEventListener('click', openAccountSheet);
   $('[data-calendar]').addEventListener('click', openCalendarSheet);

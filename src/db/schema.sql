@@ -166,6 +166,20 @@ CREATE TABLE IF NOT EXISTS access_requests (
 CREATE UNIQUE INDEX IF NOT EXISTS access_requests_one_pending ON access_requests (user_id) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests (status, created_at);
 
+-- Password reset by emailed code (schema version 6). The code is stored only as a keyed hash.
+-- Only the newest unused code for a person works; five wrong tries use it up.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    integer     NOT NULL REFERENCES users(id),
+  code_hash  text        NOT NULL,
+  expires_at timestamptz NOT NULL,
+  attempts   integer     NOT NULL DEFAULT 0,
+  used_at    timestamptz,
+  ip         text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets (user_id, created_at);
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,
@@ -184,3 +198,4 @@ ALTER TABLE notifications  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_meta       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;

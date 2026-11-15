@@ -273,7 +273,7 @@ describe('zero-step setup', () => {
   const { resetSetupState } = require('../src/db/setup');
 
   test('a brand-new empty database gets its tables and rooms on the first request', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS app_meta, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const res = await agent().get('/api/public/now');
     assert.equal(res.status, 200);
@@ -285,7 +285,7 @@ describe('zero-step setup', () => {
   });
 
   test('setup runs safely when several requests arrive at once', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS app_meta, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const results = await Promise.all([1, 2, 3, 4].map(() => agent().get('/api/public/now')));
     assert.deepEqual(results.map((r) => r.status), [200, 200, 200, 200]);
@@ -795,7 +795,10 @@ describe('passwords', () => {
     assert.equal((await other.get('/api/auth/me')).status, 401);
   });
 
-  test('forgot password: same answer for any email, admins told at most once an hour, flag shown until reset', async () => {
+  test('forgot password without email set up: same answer for any email, admins told at most once an hour, flag shown until reset', async () => {
+    const mail = require('../src/services/mail');
+    mail.setModeForTests(null);
+    try {
     const known = await agent().post('/api/auth/forgot-password').send({ email: 'AMA.FORGOT@campus.test' });
     const unknown = await agent().post('/api/auth/forgot-password').send({ email: 'nobody@campus.test' });
     assert.equal(known.status, 200);
@@ -810,6 +813,9 @@ describe('passwords', () => {
     const after = (await admin.get('/api/admin/users?q=ama.forgot')).body.users[0];
     assert.equal(after.reset_requested_at, null);
     assert.equal(after.must_change_password, true);
+    } finally {
+      mail.setModeForTests(undefined);
+    }
   });
 
   test('sessions from before this release keep working', async () => {
@@ -1187,5 +1193,124 @@ describe('calendar export', () => {
     assert.equal((await request(app).get('/api/calendar/feed/short.ics')).status, 404);
     const actions = (await db.all("SELECT action FROM audit_log WHERE action LIKE 'calendar.%' ORDER BY id")).map((r) => r.action);
     assert.deepEqual(actions, ['calendar.create_link', 'calendar.replace_link', 'calendar.remove_link']);
+  });
+});
+
+describe('password reset by emailed code', () => {
+  const mail = require('../src/services/mail');
+  const EMAIL = 'otp.person@campus.test';
+  let person;
+
+  beforeEach(async () => {
+    await resetDb();
+    mail.outbox.length = 0;
+    person = await signedIn(EMAIL);
+  });
+
+  const ask = (email = EMAIL) => agent().post('/api/auth/forgot-password').send({ email });
+  const codeFromMail = () => {
+    const m = mail.outbox.at(-1);
+    return m && m.text.match(/code is (\d{3}) (\d{3})/).slice(1).join('');
+  };
+  const reset = (code, newPassword = 'Brand9New') => {
+    const a = agent();
+    return a.post('/api/auth/reset-password').send({ email: EMAIL, code, newPassword }).then((res) => Object.assign(a, { res }));
+  };
+  const backdate = (seconds) => db.pool.query(`UPDATE password_resets SET created_at = created_at - interval '${seconds} seconds'`);
+
+  test('codes are 6 digits', () => {
+    const { newCode } = require('../src/services/passwordReset');
+    for (let i = 0; i < 200; i++) assert.match(newCode(), /^\d{6}$/);
+  });
+
+  test('a code is emailed; the reply is the same for unknown emails', async () => {
+    const known = await ask('OTP.Person@campus.test');
+    const unknown = await ask('nobody@campus.test');
+    assert.deepEqual(known.body, { ok: true, method: 'code', minutes: 10 });
+    assert.deepEqual(unknown.body, known.body);
+    assert.equal(mail.outbox.length, 1);
+    assert.equal(mail.outbox[0].to, EMAIL);
+    assert.match(mail.outbox[0].subject, /^Your Lecture Rooms code: \d{3} \d{3}$/);
+    assert.match(mail.outbox[0].html, /\d{3} \d{3}/);
+    // Only a keyed hash is stored
+    const row = await db.get('SELECT code_hash FROM password_resets');
+    assert.equal(row.code_hash.length, 64);
+    assert.ok(!row.code_hash.includes(codeFromMail()));
+  });
+
+  test('the right code sets the new password, signs you in, and signs out other devices', async () => {
+    await ask();
+    const r = await reset(codeFromMail());
+    assert.equal(r.res.status, 200);
+    assert.equal(r.res.body.user.email, EMAIL);
+    assert.equal((await r.get('/api/auth/me')).status, 200);
+    assert.equal((await person.get('/api/auth/me')).status, 401); // the old session is gone
+    assert.equal((await agent().post('/api/auth/login').send({ email: EMAIL, password: PASSWORD })).status, 401);
+    assert.equal((await agent().post('/api/auth/login').send({ email: EMAIL, password: 'Brand9New' })).status, 200);
+    const notes = await r.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /changed using a code sent to your email/);
+    // A code works once
+    assert.equal((await reset(codeFromMail(), 'Another9x')).res.status, 400);
+  });
+
+  test('spaces in the code are fine; weak passwords are refused without using up the code', async () => {
+    await ask();
+    const code = codeFromMail();
+    assert.equal((await reset(code, 'weak')).res.status, 400);
+    assert.equal((await reset(`${code.slice(0, 3)} ${code.slice(3)}`)).res.status, 200);
+  });
+
+  test('five wrong codes use it up', async () => {
+    await ask();
+    const right = codeFromMail();
+    const wrong = right === '000000' ? '111111' : '000000';
+    for (let i = 1; i <= 4; i++) {
+      const r = await reset(wrong);
+      assert.equal(r.res.status, 400);
+      assert.match(r.res.body.error, /wrong or has expired/);
+    }
+    assert.match((await reset(wrong)).res.body.error, /Too many wrong codes/);
+    assert.equal((await reset(right)).res.status, 400); // even the right one no longer works
+    const { attempts } = await db.get('SELECT attempts FROM password_resets');
+    assert.equal(attempts, 5);
+  });
+
+  test('codes expire after 10 minutes', async () => {
+    await ask();
+    await db.pool.query("UPDATE password_resets SET expires_at = now() - interval '1 second'");
+    assert.equal((await reset(codeFromMail())).res.status, 400);
+  });
+
+  test('only the newest code works; at most one a minute and five an hour', async () => {
+    await ask();
+    const first = codeFromMail();
+    await ask(); // too soon: nothing sent
+    assert.equal(mail.outbox.length, 1);
+    await backdate(61);
+    await ask();
+    assert.equal(mail.outbox.length, 2);
+    const second = codeFromMail();
+    if (first !== second) assert.equal((await reset(first)).res.status, 400);
+    for (let i = 0; i < 3; i++) { await backdate(61); await ask(); }
+    assert.equal(mail.outbox.length, 5);
+    await backdate(61);
+    await ask(); // sixth in the hour: refused quietly
+    assert.equal(mail.outbox.length, 5);
+    assert.equal((await reset(codeFromMail())).res.status, 200);
+  });
+
+  test('deactivated accounts get no code', async () => {
+    await db.run('UPDATE users SET is_active = false WHERE id = ?', [person.user.id]);
+    await ask();
+    assert.equal(mail.outbox.length, 0);
+  });
+
+  test('the audit log records sent, wrong and used codes, never the code', async () => {
+    await ask();
+    await reset('123456' === codeFromMail() ? '654321' : '123456');
+    await reset(codeFromMail());
+    const rows = await db.all("SELECT action, details FROM audit_log WHERE action LIKE 'auth.reset%' ORDER BY id");
+    assert.deepEqual(rows.map((r) => r.action), ['auth.reset_code_sent', 'auth.reset_code_wrong', 'auth.reset_with_code']);
+    assert.ok(!JSON.stringify(rows).includes(codeFromMail()));
   });
 });

@@ -27,6 +27,10 @@ router.get('/', async (req, res) => {
       report.problems.push(databaseHint(err) || 'Unexpected database error. See Vercel → Deployments → Logs.');
     }
   }
+  // Not a problem, just how "Forgot password" works on this site.
+  report.passwordReset = require('../services/mail').mode() === 'smtp'
+    ? 'by emailed code'
+    : config.isProd ? 'through the timetable office (add SMTP settings to send codes by email)' : 'by code, printed in the server console';
   report.ok = report.problems.length === 0;
   res.status(report.ok ? 200 : 503).json(report);
 });

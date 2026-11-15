@@ -66,19 +66,47 @@
 
       <form class="form" data-form="forgot" novalidate hidden>
         <h1 class="serif auth__title">Forgot your password?</h1>
-        <p class="auth__text">The timetable office resets passwords in person, so nobody else can take over your account.</p>
-        <ol class="steps">
-          <li>Enter the email you registered with. The timetable office is told.</li>
-          <li>Visit or call them with your student or staff ID card.</li>
-          <li>They give you a temporary password. Sign in with it and choose a new one.</li>
-        </ol>
+        <!-- By email: a code. Without email set up: the timetable office. app.js shows one. -->
+        <p class="auth__text" data-reset-by="email">Enter the email you registered with and we’ll send you a 6-digit code to choose a new password.</p>
+        <div data-reset-by="office" hidden>
+          <p class="auth__text">The timetable office resets passwords in person, so nobody else can take over your account.</p>
+          <ol class="steps">
+            <li>Enter the email you registered with. The timetable office is told.</li>
+            <li>Visit or call them with your student or staff ID card.</li>
+            <li>They give you a temporary password. Sign in with it and choose a new one.</li>
+          </ol>
+        </div>
         <label class="field">
           <span class="field__label">University email</span>
           <input name="email" type="email" autocomplete="username" required>
         </label>
         <p class="alert" data-error hidden></p>
-        <button class="button button--primary" type="submit">Tell the timetable office</button>
+        <button class="button button--primary" type="submit" data-forgot-submit>Send me a code</button>
         <p class="auth__done" data-forgot-done hidden role="status"></p>
+        <p class="auth__switch"><button class="link-button" type="button" data-switch="login">Back to sign in</button></p>
+      </form>
+
+      <!-- Step 2 of a reset by email: the code and a new password -->
+      <form class="form" data-form="reset-code" novalidate hidden>
+        <h1 class="serif auth__title">Check your email</h1>
+        <p class="auth__text" data-code-sent></p>
+        <label class="field">
+          <span class="field__label">6-digit code</span>
+          <input name="code" class="mono code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+                 pattern="[0-9 ]*" placeholder="000 000" required>
+        </label>
+        <label class="field">
+          <span class="field__label">New password</span>
+          <input name="newPassword" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <label class="field">
+          <span class="field__label">New password again</span>
+          <input name="repeat" type="password" autocomplete="new-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Reset password and sign in</button>
+        <p class="auth__switch">No email? Check your spam folder, or <button class="link-button" type="button" data-resend>send a new code</button>.</p>
         <p class="auth__switch"><button class="link-button" type="button" data-switch="login">Back to sign in</button></p>
       </form>
 

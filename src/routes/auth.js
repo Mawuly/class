@@ -8,6 +8,8 @@ const db = require('../db');
 const { AppError } = require('../utils/errors');
 const { EMAIL_RE, passwordProblem } = require('../utils/validate');
 const { audit } = require('../services/audit');
+const mail = require('../services/mail');
+const passwordReset = require('../services/passwordReset');
 const { setSession, clearSession, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -137,6 +139,12 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
  */
 router.post('/forgot-password', authLimiter, async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254);
+  // With email set up, send a 6-digit code. The reply never says whether the account exists.
+  if (mail.enabled()) {
+    if (EMAIL_RE.test(email)) await passwordReset.requestCode(email, { ip: req.ip });
+    return res.json({ ok: true, method: 'code', minutes: passwordReset.CODE_MINUTES });
+  }
+  // Without email, the timetable office is told and resets it in person.
   const user = EMAIL_RE.test(email)
     ? await db.get('SELECT id, name, email FROM users WHERE lower(email) = ? AND is_active', [email])
     : null;
@@ -157,7 +165,20 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       });
     }
   }
-  res.json({ ok: true });
+  res.json({ ok: true, method: 'office' });
+});
+
+/** How "Forgot password" works on this site, so the page can explain the right steps. */
+router.get('/options', (req, res) => {
+  res.json({ resetByEmail: mail.enabled(), codeMinutes: passwordReset.CODE_MINUTES });
+});
+
+/** Second step: the emailed code and a new password. Signs the person in on success. */
+router.post('/reset-password', authLimiter, async (req, res) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254);
+  const user = await passwordReset.resetWithCode(email, req.body?.code, req.body?.newPassword, { ip: req.ip });
+  setSession(res, user);
+  res.json({ user: publicUser(user) });
 });
 
 module.exports = router;

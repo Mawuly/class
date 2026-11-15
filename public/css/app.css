@@ -1175,3 +1175,8 @@ kbd {
   .ticker__track [aria-hidden="true"] { display: none; }
   .ticker { mask-image: none; }
 }
+
+/* The emailed code: large, spaced digits, easy to compare with the email. */
+.code-input { font-size: 24px; letter-spacing: 0.25em; text-align: center; min-height: 52px; }
+.code-input::placeholder { letter-spacing: 0.25em; opacity: .35; }
+[data-resend]:disabled { color: var(--text-muted); text-decoration: none; cursor: default; }
