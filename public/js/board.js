@@ -54,9 +54,21 @@ function block(bk) {
   h('span', { class: 'block__time mono' }, `${bk.start_time}–${bk.end_time}`));
 }
 
-function row(room, bookings, bookableFrom) {
+/** A temporary closure set by the timetable office: hatched, with its reason. */
+function closure(c) {
+  return h('div', {
+    class: 'block block--closed',
+    style: `left:${pct(c.start_time)}%;width:${pct(c.end_time) - pct(c.start_time)}%`,
+    title: `Unavailable ${c.start_time}–${c.end_time}\n${c.reason}`,
+  },
+  h('span', { class: 'block__title' }, `Unavailable · ${c.reason}`),
+  h('span', { class: 'block__time mono' }, `${c.start_time}–${c.end_time}`));
+}
+
+function row(room, bookings, bookableFrom, closures = []) {
   const busy = new Array(slotCount()).fill(null);
-  for (const bk of bookings) {
+  // Closures take their slots like bookings do, so they can't be selected.
+  for (const bk of [...bookings, ...closures.map((c) => ({ ...c, title: `unavailable (${c.reason})` }))]) {
     const s = Math.max(0, Math.floor((toMin(bk.start_time) - open()) / step()));
     const e = Math.min(slotCount(), Math.ceil((toMin(bk.end_time) - open()) / step()));
     for (let i = s; i < e; i++) busy[i] = bk;
@@ -78,6 +90,7 @@ function row(room, bookings, bookableFrom) {
     track.append(h('div', { class: 'track__past', style: `width:${(until / slotCount()) * 100}%` }));
   }
   for (const bk of bookings) track.append(block(bk));
+  for (const c of closures) track.append(closure(c));
   track.append(h('div', { class: 'ghost', hidden: true }, h('span', { class: 'ghost__label mono' })));
 
   return h('div', { class: 'board__row' },
@@ -90,7 +103,8 @@ function row(room, bookings, bookableFrom) {
 
 function hoursHeader() {
   const labels = [];
-  for (let m = open(); m < close(); m += 60) {
+  // Labels on whole hours, even when rooms open on the half hour (e.g. 06:30).
+  for (let m = Math.ceil(open() / 60) * 60; m < close(); m += 60) {
     labels.push(h('span', { class: 'board__hour mono', style: `left:${pct(fromMin(m))}%` }, fromMin(m).slice(0, 2)));
   }
   return h('div', { class: 'board__head' },
@@ -103,6 +117,8 @@ function render() {
   const bookableFrom = firstBookableSlot();
   const byRoom = new Map(rooms.map((r) => [r.id, []]));
   for (const bk of bookings) byRoom.get(bk.room_id)?.push(bk);
+  const closedByRoom = new Map();
+  for (const c of b.data.blocks || []) closedByRoom.set(c.room_id, [...(closedByRoom.get(c.room_id) || []), c]);
 
   const groups = [];
   let current = null;
@@ -111,7 +127,7 @@ function render() {
       current = { code: r.building_code, name: r.building_name, rows: [] };
       groups.push(current);
     }
-    current.rows.push(row(r, byRoom.get(r.id), bookableFrom));
+    current.rows.push(row(r, byRoom.get(r.id), bookableFrom, closedByRoom.get(r.id)));
   }
 
   const body = h('div', { class: 'board__body' },
@@ -197,10 +213,13 @@ function slotAt(track, clientX) {
 function book(track, lo, hi) {
   hideGhost(track);
   const room = track.room;
+  // Bookings last whole hours: a selection is rounded up to the next whole hour.
+  const start = toMin(slotStart(lo));
+  const end = start + Math.ceil((toMin(slotStart(hi + 1)) - start) / 60) * 60;
   openSheet(room, {
     date: b.date,
-    start: slotStart(lo),
-    end: slotStart(hi + 1),
+    start: fromMin(start),
+    end: fromMin(Math.min(end, close())),
     attendees: Math.min(room.capacity, 10),
   }, { user: b.ctx.user, rules: b.ctx.rules, onBooked: () => load() });
 }

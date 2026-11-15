@@ -63,6 +63,33 @@ export function openCheckInSheet(b, { onDone } = {}) {
   input.focus();
 }
 
+/**
+ * Leaving early: ends the booking now so the rest of the slot is free for others.
+ * Needs a second click within a few seconds, like Cancel.
+ */
+export function checkOutButton(b, { onDone, cls = 'link-button checkin__out' } = {}) {
+  let armed = null;
+  const label = 'Check out early';
+  const button = h('button', { class: cls, type: 'button', 'aria-label': `Check out of ${b.room_code || 'this room'} now and free the rest of the booking` }, label);
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      button.textContent = 'Free the room now?';
+      armed = setTimeout(() => { armed = null; button.textContent = label; }, 4000);
+      return;
+    }
+    clearTimeout(armed);
+    button.disabled = true;
+    try {
+      await api(`/bookings/${b.id}/check-out`, { method: 'POST' });
+      onDone?.();
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = err.message;
+    }
+  });
+  return button;
+}
+
 /** The check-in line on the dashboard's next-booking card (or nothing when it doesn't apply). */
 export function checkInLine(b, rules, { onDone } = {}) {
   if (!rules?.checkInGraceMinutes) return '';
@@ -70,8 +97,10 @@ export function checkInLine(b, rules, { onDone } = {}) {
   const release = rules.releaseNoShows;
   if (s.state === 'checked-in') {
     const at = new Date(b.checked_in_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const started = b.date === isoDate(new Date()) && hhmm(new Date()) > b.start_time;
     return h('div', { class: 'checkin checkin--done' }, h('span', { class: 'checkin__mark', 'aria-hidden': 'true' }, '✓'),
-      h('span', {}, `Checked in at ${at}`));
+      h('span', {}, `Checked in at ${at}`),
+      started && !b.checked_out_at ? checkOutButton(b, { onDone }) : '');
   }
   if (s.state === 'open') {
     return h('div', { class: 'checkin checkin--open' },

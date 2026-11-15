@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { $, $$, h, showError } from './util.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
+import { closuresPanel, openClosureSheet } from './closures-admin.js';
 
 const view = $('[data-view="rooms"]');
 const table = $('[data-rooms-table]', view);
@@ -93,7 +94,11 @@ function fillBuildingFilter() {
 async function load() {
   showError(view, '');
   try {
-    r.data = await api('/admin/rooms');
+    const [data, closures, settings] = await Promise.all([api('/admin/rooms'), api('/admin/room-blocks'), api('/admin/settings')]);
+    r.data = data;
+    r.blocks = closures.blocks;
+    r.rules = settings.settings;
+    $('[data-closures]', view).replaceChildren(closuresPanel({ blocks: r.blocks, rooms: r.data.rooms, rules: r.rules, onChange: load }));
     fillBuildingFilter();
     render();
   } catch (err) {
@@ -267,6 +272,9 @@ function openRoom(room, buildingId) {
       h('p', { class: 'danger__status' }, status),
       confirmBox,
       h('div', { class: 'sheet__actions' },
+        room.is_active
+          ? h('button', { class: 'button button--secondary', type: 'button', onclick: () => openClosureSheet({ rooms: r.data.rooms, roomId: room.id, rules: r.rules, onDone: load }) }, 'Close for a time…')
+          : '',
         room.is_active
           ? h('button', { class: 'button button--secondary', type: 'button', onclick: () => setActive(false) }, 'Deactivate room')
           : h('button', { class: 'button button--secondary', type: 'button', onclick: () => setActive(true) }, 'Reactivate room'),

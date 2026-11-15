@@ -1351,3 +1351,33 @@ kbd {
 }
 .rt-act { display: flex; justify-content: flex-end; gap: 12px; }
 a.button { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Temporary closures on the day board and week view: crossed hatch, no fill, the reason shown. */
+.block--closed {
+  color: var(--text); cursor: not-allowed;
+  border: 1px solid rgb(var(--bone-rgb) / 0.35);
+  background: repeating-linear-gradient(45deg, rgb(var(--bone-rgb) / 0.14) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.14) 0 1px, transparent 1px 6px), rgb(var(--ink-rgb) / 0.75);
+}
+.checkin__out { margin-left: auto; }
+
+/* ---------- Closures panel (Rooms page) and Settings ------------------------------------- */
+
+.closures { margin-bottom: 18px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--ink); }
+.closures__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.closures__empty { margin-top: 8px; font-size: 13px; }
+.closures__list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; }
+.closure {
+  display: grid; grid-template-columns: 90px 220px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 10px 0; border-top: 1px dashed var(--line); font-size: 13px;
+}
+.closure__room { color: var(--text-strong); }
+.closure__when { color: var(--text); font-size: 12px; }
+.closure__why small { color: var(--text-muted); }
+.clash__list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; display: grid; gap: 4px; }
+.settings-form { max-width: 720px; display: grid; gap: 14px; }
+.settings-form__summary { font-size: 15px; color: var(--text-strong); }
+@media (max-width: 720px) {
+  .closure { grid-template-columns: 80px minmax(0, 1fr); }
+  .closure__why { grid-column: 1 / -1; }
+}

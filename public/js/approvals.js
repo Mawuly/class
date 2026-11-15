@@ -156,7 +156,8 @@ function stub(b) {
     h('div', { class: 'stub__perf', 'aria-hidden': 'true' }),
     h('p', { class: 'stub__when mono' }, `${longDate(b.date)} · ${b.start_time}–${b.end_time}`),
     h('p', { class: 'stub__meta mono' },
-      `${b.attendees} of ${b.room_capacity} seats · ${CATEGORY[b.category] || b.category}${b.course_code ? ` · ${b.course_code}` : ''}`));
+      `${b.attendees} of ${b.room_capacity} seats · ${CATEGORY[b.category] || b.category}${b.course_code ? ` · ${b.course_code}` : ''}`),
+    b.supervisor ? h('p', { class: 'stub__meta mono' }, `Supervisor · ${b.supervisor}`) : '');
 }
 
 function contextBlock(b, ctx) {
@@ -261,8 +262,8 @@ function actions(x) {
   const access = x.kind === 'access';
   if (q.rejecting) {
     const reason = h('textarea', {
-      class: 'reject__reason', rows: '3', maxlength: '300', 'aria-label': 'Reason for rejecting (optional, sent to the person)',
-      placeholder: 'Reason (optional): they see this',
+      class: 'reject__reason', rows: '3', maxlength: '300', 'aria-label': access ? 'Reason for rejecting (optional, sent to the person)' : 'Reason for rejecting (required, sent to the person)',
+      placeholder: access ? 'Reason (optional): they see this' : 'Reason: they see this',
     });
     reason.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); decide('rejected', reason.value); }
@@ -339,6 +340,11 @@ async function decide(decision, reason) {
       live.textContent = 'Tick all three checks before approving.';
       $('.checklist input:not(:checked)', detail)?.focus();
     }
+    return;
+  }
+  if (decision === 'rejected' && !access && String(reason || '').trim().length < 3) {
+    showError(view, 'Give a reason for the rejection, so the person knows why.');
+    $('.reject__reason', detail)?.focus();
     return;
   }
   q.busy = true;

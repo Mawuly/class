@@ -140,25 +140,23 @@ function option(value, label = value, selected = false) {
 function fillStart(selected) {
   const { open, close, slotMinutes } = ctx.rules;
   const options = [];
-  for (let m = toMin(open); m + slotMinutes <= toMin(close); m += slotMinutes) options.push(option(fromMin(m)));
+  // Starts every half hour; the shortest booking is one hour, so the last start is an hour before closing.
+  for (let m = toMin(open); m + 60 <= toMin(close); m += slotMinutes) options.push(option(fromMin(m)));
   f.start.replaceChildren(...options);
   f.start.value = selected;
 }
 
-/** End times run from one slot after the start to the 6-hour limit or closing time. */
+/** Bookings last whole hours: end times run one hour at a time up to the longest class or closing time. */
 function fillEnd(selected) {
-  const { close, slotMinutes, maxHours } = ctx.rules;
+  const { close, maxHours } = ctx.rules;
   const s = toMin(f.start.value);
   const last = Math.min(s + maxHours * 60, toMin(close));
   const options = [];
-  for (let m = s + slotMinutes; m <= last; m += slotMinutes) {
-    const mins = m - s;
-    const length = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h${mins % 60 ? ' 30' : ''}`;
-    options.push(option(fromMin(m), `${fromMin(m)}  (${length})`));
-  }
+  for (let m = s + 60; m <= last; m += 60) options.push(option(fromMin(m), `${fromMin(m)}  (${(m - s) / 60} h)`));
   f.end.replaceChildren(...options);
-  const wanted = toMin(selected || fromMin(s + 60));
-  f.end.value = fromMin(Math.min(Math.max(wanted, s + slotMinutes), last));
+  // Keep the wanted length, rounded to whole hours.
+  const wanted = Math.round((toMin(selected || fromMin(s + 60)) - s) / 60) * 60 + s;
+  f.end.value = fromMin(Math.min(Math.max(wanted, s + 60), Math.floor((last - s) / 60) * 60 + s));
 }
 
 function updateStub() {
@@ -267,7 +265,7 @@ export function openSheet(room, prefill, { user, rules, onBooked }) {
   const categories = isStudent ? STUDENT_CATEGORIES : STAFF_CATEGORIES;
   f.category.replaceChildren(...categories.map((c) => option(c, LABELS[c])));
   f.category.value = isStudent ? 'study' : 'lecture';
-  $('[data-staff-only]', dialog).hidden = isStudent;
+  // Course code and supervisor are open to everyone (a student request may be for a course or a project).
   f.title.placeholder = isStudent ? 'e.g. Group revision for MATH 221' : 'e.g. Data Structures lecture';
 
   const today = isoDate(new Date());

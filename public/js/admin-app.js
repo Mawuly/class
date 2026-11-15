@@ -7,11 +7,12 @@ import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
 import { showStats } from './stats.js';
 import { showAudit } from './audit.js';
+import { showSettings } from './settings-admin.js';
 import { staffFields } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
 import { startPasswordToggles } from './password-toggle.js';
 
-const PAGES = ['approvals', 'rooms', 'people', 'stats', 'audit'];
+const PAGES = ['approvals', 'rooms', 'people', 'stats', 'audit', 'settings'];
 const VIEWS = ['portal-landing', 'not-admin', ...PAGES];
 const state = { user: null, meta: null, badgeTimer: null, staff: null };
 
@@ -167,6 +168,7 @@ async function route() {
   if (page === 'people') showPeople({ me: state.user });
   if (page === 'stats') showStats({ buildings: state.meta.buildings });
   if (page === 'audit') showAudit();
+  if (page === 'settings') showSettings();
 }
 
 async function enter(user, opts = {}) {

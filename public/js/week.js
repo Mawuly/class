@@ -47,9 +47,20 @@ function block(b) {
   h('span', { class: 'wblock__title' }, b.mine ? h('span', { 'aria-hidden': 'true' }, '■ ') : '', label));
 }
 
-function dayColumn(date, bookings) {
+/** A temporary closure: hatched, with its reason. */
+function closure(c) {
+  return h('div', {
+    class: 'wblock block--closed',
+    style: `top:${pctOf(c.start_time)}%;height:${pctOf(c.end_time) - pctOf(c.start_time)}%`,
+    title: `Unavailable ${c.start_time}–${c.end_time}\n${c.reason}`,
+  },
+  h('span', { class: 'wblock__time mono' }, `${c.start_time}–${c.end_time}`),
+  h('span', { class: 'wblock__title' }, `Unavailable · ${c.reason}`));
+}
+
+function dayColumn(date, bookings, closures = []) {
   const busy = new Array(slots()).fill(null);
-  for (const b of bookings) {
+  for (const b of [...bookings, ...closures.map((c) => ({ ...c, title: `unavailable (${c.reason})` }))]) {
     const s = Math.max(0, Math.floor((toMin(b.start_time) - open()) / step()));
     const e = Math.min(slots(), Math.ceil((toMin(b.end_time) - open()) / step()));
     for (let i = s; i < e; i++) busy[i] = b;
@@ -67,6 +78,7 @@ function dayColumn(date, bookings) {
     col.append(h('div', { class: 'wday__past', style: `height:${(Math.min(from, slots()) / slots()) * 100}%` }));
   }
   for (const b of bookings) col.append(block(b));
+  for (const c of closures) col.append(closure(c));
   col.append(h('div', { class: 'wghost', hidden: true }, h('span', { class: 'wghost__label mono' })));
   return col;
 }
@@ -78,6 +90,8 @@ function render() {
   const today = isoDate(new Date());
   const byDay = new Map(days.map((x) => [x, []]));
   for (const b of d.bookings) byDay.get(b.date)?.push(b);
+  const closedByDay = new Map();
+  for (const c of d.blocks || []) closedByDay.set(c.date, [...(closedByDay.get(c.date) || []), c]);
 
   $('[data-week-code]', view).textContent = r.code;
   $('[data-week-name]', view).textContent = `${r.name} · ${r.building_name}`;
@@ -91,7 +105,7 @@ function render() {
   $('[data-week-today]', view).disabled = isThisWeek;
 
   const hours = [];
-  for (let m = open(); m < close(); m += 60) hours.push(h('span', { class: 'wtime__h mono', style: `top:${pctOf(fromMin(m))}%` }, fromMin(m)));
+  for (let m = Math.ceil(open() / 60) * 60; m < close(); m += 60) hours.push(h('span', { class: 'wtime__h mono', style: `top:${pctOf(fromMin(m))}%` }, fromMin(m)));
 
   grid.replaceChildren(h('div', { class: 'week__inner', style: `--slots:${slots()}` },
     h('div', { class: 'week__corner' }),
@@ -101,7 +115,7 @@ function render() {
     h('div', { class: 'wtime', 'aria-hidden': 'true' }, ...hours),
     // Placed explicitly, so the current-time line can share today's cell without displacing it.
     ...days.map((x, i) => {
-      const col = dayColumn(x, byDay.get(x));
+      const col = dayColumn(x, byDay.get(x), closedByDay.get(x));
       col.style.gridArea = `2 / ${i + 2}`;
       return col;
     }),
@@ -174,7 +188,10 @@ function dragBounds(col, i) {
 function book(col, lo, hi) {
   hideGhost(col);
   const room = { ...w.data.room };
-  openSheet(room, { date: col.date, start: slotStart(lo), end: slotStart(hi + 1), attendees: Math.min(room.capacity, 10) },
+  // Bookings last whole hours: a selection is rounded up to the next whole hour.
+  const start = toMin(slotStart(lo));
+  const end = Math.min(start + Math.ceil((toMin(slotStart(hi + 1)) - start) / 60) * 60, close());
+  openSheet(room, { date: col.date, start: fromMin(start), end: fromMin(end), attendees: Math.min(room.capacity, 10) },
     { user: w.ctx.user, rules: w.ctx.rules, onBooked: () => load() });
 }
 

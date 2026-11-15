@@ -2,7 +2,7 @@
 // Shows whether the room is free, checks you in to your booking, and books it from the next half hour.
 import { api } from './api.js';
 import { $, h, showError, toMin, fromMin } from './util.js';
-import { checkIn, formatCode } from './checkin.js';
+import { checkIn, formatCode, checkOutButton } from './checkin.js';
 
 const CATEGORIES = {
   lecture: 'Lecture', tutorial: 'Tutorial', lab: 'Lab', exam: 'Exam', meeting: 'Meeting', study: 'Study', event: 'Event',
@@ -95,7 +95,12 @@ function mineCard(d) {
   }
   if (m.state === 'checked-in') {
     return h('section', { class: 'door-card door-card--done panel' }, head, title,
-      h('p', { class: 'door-card__ok' }, h('span', { 'aria-hidden': 'true' }, '✓ '), `Checked in. The room is yours until ${m.end}.`));
+      h('p', { class: 'door-card__ok' }, h('span', { 'aria-hidden': 'true' }, '✓ '), `Checked in. The room is yours until ${m.end}.`),
+      m.start < d.time ? checkOutButton({ id: m.id, room_code: d.room.code }, {
+        cls: 'button button--secondary door__big',
+        onDone: () => { flash = `Checked out. ${d.room.code} is free for others now.`; load(); },
+      }) : '',
+      m.start < d.time ? h('p', { class: 'muted' }, 'Leaving early? Check out so others can use the room.') : '');
   }
   if (m.state === 'early') {
     return h('section', { class: 'door-card panel' }, head, title,

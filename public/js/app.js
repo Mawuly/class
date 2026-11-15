@@ -311,7 +311,12 @@ function nextSlot() {
 }
 
 function fillStartOptions() {
-  const { close } = state.meta.rules;
+  const { close, maxHours } = state.meta.rules;
+  // How long: whole hours up to the longest booking the office allows.
+  const duration = $('[data-form="find"] [name="duration"]');
+  const keep = Number(duration.value) || 120;
+  duration.replaceChildren(...Array.from({ length: maxHours }, (_, i) => (i + 1) * 60)
+    .map((m) => h('option', { value: String(m), selected: m === Math.min(keep, maxHours * 60) }, `${m / 60}h`)));
   const slot = nextSlot();
   const select = $('[data-start-options]');
   const options = [];
@@ -496,7 +501,7 @@ async function enterApp(user) {
 const PAGES = { '#/board': 'board' };
 const APP_VIEWS = ['dashboard', 'board', 'week'];
 // Old links to admin pages on the main site now open the timetable office portal.
-const MOVED_TO_PORTAL = ['#/approvals', '#/rooms', '#/people', '#/stats', '#/audit'];
+const MOVED_TO_PORTAL = ['#/approvals', '#/rooms', '#/people', '#/stats', '#/audit', '#/settings'];
 
 /** Pages for students and lecturers: "#/" dashboard, "#/board" day board, "#/room/12" a room's week. */
 async function route() {
