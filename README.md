@@ -16,7 +16,8 @@ Every feature in the project plan is built.
 - Calendar export: an .ics file, or a private subscription link for Google Calendar, Outlook or Apple Calendar that stays up to date
 - "Campus Now" landing page with live room counts; dashboard with your next booking, Coming up and notifications
 
-**Timetable office (admins)**
+**Timetable office portal (admins, at `/admin`)**
+- A separate page with its own sign-in and navigation; students and lecturers never see it. Admins reach it from the **Timetable office ↗** link on the main site, which shows how many requests are waiting
 - Approvals inbox for room requests and staff access requests, with keyboard shortcuts (A / R) and reasons
 - Rooms and buildings: add, edit, deactivate (upcoming bookings cancelled and people told), delete if never booked
 - People: change roles, correct details, deactivate accounts, reset passwords
@@ -24,6 +25,7 @@ Every feature in the project plan is built.
 - Audit log: every action as a sentence, filters, a failed-sign-in warning, CSV export
 
 **Accounts and security**
+- Sign-up asks "I am a student" or "I am a lecturer". Lecturers attach their letter at sign-up; timetable office staff request access on the portal (`/admin` → Request access)
 - Staff verification: lecturers and admins upload an offer or appointment letter, checked by an admin; the letter is deleted after the decision and only its SHA-256 fingerprint is kept
 - Passwords hashed with bcrypt; sessions in an `httpOnly` cookie; every login token carries a session version, so a reset or password change signs out every device
 - Forgot password by a 6-digit code texted through Arkesel to a confirmed phone number, or emailed to people without one (valid 10 minutes, 5 tries, newest code only, at most one a minute and five an hour, stored as a keyed hash); otherwise through the timetable office with a one-time temporary password
@@ -85,11 +87,11 @@ time it meets an empty database.
      Vercel → Settings → Environment Variables as `DATABASE_URL`.
 4. **Make yourself the first admin:** in Vercel → Settings → Environment Variables add `ADMIN_EMAILS`
    with your email address (several can be separated by commas). Someone has to review the first staff
-   request; after that, new lecturers and admins sign up with their offer letter and you approve them
-   under Approvals → Staff access.
+   request; after that, lecturers sign up on the main site and office staff request access at `/admin`,
+   both with their offer letter, and you approve them at `/admin` under Approvals → Staff access.
 5. **Redeploy** (Deployments → latest → ⋯ → Redeploy). Settings only reach deployments made after you add them.
 6. Open `https://<your-site>.vercel.app/api/health`. When it shows `"ok": true`, open the site and
-   **register with the email from step 4**. You are now the admin.
+   **register with the email from step 4**. You are now the admin: open `https://<your-site>.vercel.app/admin`.
 
 Optional settings (Vercel → Settings → Environment Variables):
 
@@ -99,7 +101,7 @@ Optional settings (Vercel → Settings → Environment Variables):
 | `ALLOWED_EMAIL_DOMAIN` | e.g. `ug.edu.gh`: only addresses at that domain can register. |
 | `JWT_SECRET` | A long random string for signing logins. Optional: without it, one is derived from the database connection string. |
 
-To use your campus's real rooms, sign in as admin and open **Rooms**: add your buildings and rooms,
+To use your campus's real rooms, sign in at `/admin` and open **Rooms**: add your buildings and rooms,
 and delete the demo ones (any demo room that was never booked can be deleted; booked ones can be
 deactivated).
 

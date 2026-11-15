@@ -1201,3 +1201,23 @@ kbd {
 .phone-box__text { font-size: 13px; color: var(--text); }
 .phone-prompt { margin-top: 12px; font-size: 13px; color: var(--text-muted); }
 .phone-prompt .link-button { margin-left: 4px; }
+
+/* ---------- Timetable office portal (/admin) ------------------------------------------- */
+
+.portal-tag {
+  padding: 3px 8px; border: 1px solid var(--bone); border-radius: 4px;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-strong);
+}
+.is-portal .stage__fallback { opacity: .6; }
+/* The portal is a working tool: solid panels, no glass. */
+.portal-auth { background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 28px; display: grid; gap: 14px; }
+.portal-auth .auth__text a, .auth__staff a, .access-banner__aside a { color: var(--text-strong); text-underline-offset: 3px; text-decoration-color: var(--line); }
+.portal-status { display: grid; gap: 10px; font-size: 14px; color: var(--text); }
+.portal-status b { color: var(--text-strong); font-weight: 500; }
+.portal-status__pending {
+  padding: 12px 14px; border: 1px dashed rgb(var(--bone-rgb) / 0.6); border-radius: var(--r-input);
+  background: repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.06) 0 2px, transparent 2px 8px);
+}
+.topbar__link--portal { color: var(--text-strong); }
+.access-banner__aside { color: var(--text-muted); }
+.is-portal .landing--single { min-height: calc(100dvh - 90px); }

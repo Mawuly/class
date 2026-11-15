@@ -411,7 +411,7 @@ function setTab(tab) {
 }
 
 function onKey(e) {
-  if (view.hidden || !isQueue() || $('[data-sheet]').open || $('[data-edit-sheet]').open) return;
+  if (view.hidden || !isQueue() || $('[data-sheet]')?.open || $('[data-edit-sheet]')?.open) return;
   if (e.target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
   const key = e.key.toLowerCase();
   if (key === 'arrowdown' || key === 'j') { e.preventDefault(); select(q.selected + 1, { focusList: true }); }

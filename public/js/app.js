@@ -1,11 +1,6 @@
 import { api } from './api.js';
 import { openSheet } from './sheet.js';
 import { showBoard, hideBoard } from './board.js';
-import { showApprovals, pendingCount } from './approvals.js';
-import { showRooms } from './rooms-admin.js';
-import { showPeople } from './people-admin.js';
-import { showStats } from './stats.js';
-import { showAudit } from './audit.js';
 import { openCalendarSheet } from './calendar.js';
 import { phoneSection } from './phone.js';
 import { startPasswordToggles } from './password-toggle.js';
@@ -217,9 +212,9 @@ function since(iso) {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-/** Roles this person could still ask for. */
+/** Roles this person could ask for here. Timetable office access is asked for on the portal. */
 function requestableRoles() {
-  return { student: ['lecturer', 'admin'], lecturer: ['admin'] }[state.user.role] || [];
+  return state.user.role === 'student' ? ['lecturer'] : [];
 }
 
 function renderAccessBanner(request) {
@@ -244,8 +239,8 @@ function renderAccessBanner(request) {
       + `${request.decision_reason ? ` Reason: ${request.decision_reason.replace(/([^.!?])$/, '$1.')}` : ''} `),
     askButton('Send a new request')];
   } else if (roles.length) {
-    content = [h('p', {}, state.user.role === 'student' ? 'Staff member? ' : 'Work in the timetable office? ',
-      askButton(state.user.role === 'student' ? 'Request lecturer or admin access' : 'Request admin access'))];
+    content = [h('p', {}, 'Lecturer? ', askButton('Request lecturer access'),
+      h('span', { class: 'access-banner__aside' }, ' · Timetable office staff: ', h('a', { href: '/admin' }, 'use the portal')))];
   }
   banner.className = `access-banner access-banner--${kind}`;
   banner.replaceChildren(...(content || []));
@@ -253,7 +248,9 @@ function renderAccessBanner(request) {
 }
 
 async function loadAccessBanner() {
-  if (!requestableRoles().length && !state.accessError) { renderAccessBanner(null); return; }
+  // Admins have nothing to ask for; everyone else may have a request waiting (lecturer access
+  // from here, or timetable office access from the portal).
+  if (state.user.role === 'admin' && !state.accessError) { renderAccessBanner(null); return; }
   try {
     const { request } = await api('/access-requests/mine');
     renderAccessBanner(request);
@@ -484,17 +481,18 @@ async function enterApp(user) {
   await route();
 }
 
-const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people', '#/stats': 'stats', '#/audit': 'audit' };
-const APP_VIEWS = ['dashboard', 'board', 'week', 'approvals', 'rooms', 'people', 'stats', 'audit'];
-const ADMIN_PAGES = ['approvals', 'rooms', 'people', 'stats', 'audit'];
+const PAGES = { '#/board': 'board' };
+const APP_VIEWS = ['dashboard', 'board', 'week'];
+// Old links to admin pages on the main site now open the timetable office portal.
+const MOVED_TO_PORTAL = ['#/approvals', '#/rooms', '#/people', '#/stats', '#/audit'];
 
-/** Signed-in pages: "#/" dashboard, "#/board" day board; admins also approvals, rooms and people. */
+/** Pages for students and lecturers: "#/" dashboard, "#/board" day board, "#/room/12" a room's week. */
 async function route() {
   if (!state.user) return;
+  if (MOVED_TO_PORTAL.includes(location.hash)) { location.replace(`/admin${location.hash}`); return; }
   // "#/room/12?date=2026-11-16" is one room's week.
   const roomMatch = location.hash.match(/^#\/room\/(\d+)(?:\?date=(\d{4}-\d{2}-\d{2}))?$/);
-  let page = roomMatch ? 'week' : PAGES[location.hash] || 'dashboard';
-  if (ADMIN_PAGES.includes(page) && state.user.role !== 'admin') page = 'dashboard';
+  const page = roomMatch ? 'week' : PAGES[location.hash] || 'dashboard';
   for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = v !== page;
   // Data-heavy pages keep the top bar fixed as glass over the scrolling page.
   document.body.classList.toggle('is-board', page !== 'dashboard');
@@ -504,25 +502,20 @@ async function route() {
   else hideWeek();
   if (page === 'board') showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
   else hideBoard();
-  if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
-  // After a room edit, refresh the cached building and facility lists used by the board and search.
-  if (page === 'people') showPeople({ me: state.user });
-  if (page === 'stats') showStats({ buildings: state.meta.buildings });
-  if (page === 'audit') showAudit();
-  if (page === 'rooms') showRooms({ onChange: async () => { state.meta = await api('/rooms/meta'); } });
   if (page === 'dashboard') await loadDashboard();
 }
 
-function setPendingBadge(n) {
-  const badge = $('[data-pending-badge]');
-  badge.textContent = n > 99 ? '99+' : String(n);
-  badge.hidden = !n;
-  $('[data-nav="approvals"]').setAttribute('aria-label', n ? `Approvals, ${n} waiting` : 'Approvals');
-}
-
+/** Admins see how much is waiting for them, on the link to the timetable office portal. */
 async function refreshPendingBadge() {
   if (state.user?.role !== 'admin') return;
-  try { setPendingBadge(await pendingCount()); } catch { /* keep the last count */ }
+  try {
+    const { bookings, access } = await api('/admin/pending-counts');
+    const n = bookings + access;
+    const badge = $('[data-pending-badge]');
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.hidden = !n;
+    $('.topbar__link--portal').setAttribute('aria-label', n ? `Timetable office, ${n} waiting` : 'Timetable office');
+  } catch { /* keep the last count */ }
 }
 
 /* ---------- Passwords -------------------------------------------------------------- */

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#12161C">
+  <title>Timetable Office</title>
+  <meta name="description" content="The timetable office: approve requests, manage rooms and people, see how rooms are used.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161C'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%23EDE6DA'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/admin-app.js"></script>
+</head>
+<body class="is-app is-board is-portal">
+  <div class="stage" aria-hidden="true"><div class="stage__fallback"></div></div>
+
+  <header class="topbar">
+    <a class="brand" href="/admin">Lecture Rooms</a>
+    <span class="portal-tag mono">Timetable office</span>
+    <span class="clock mono" data-clock></span>
+    <nav class="topbar__nav" data-signed-in hidden aria-label="Timetable office">
+      <a class="topbar__link" href="#/approvals" data-nav="approvals">Approvals <span class="count mono" data-pending-badge hidden></span></a>
+      <a class="topbar__link" href="#/rooms" data-nav="rooms">Rooms</a>
+      <a class="topbar__link" href="#/people" data-nav="people">People</a>
+      <a class="topbar__link" href="#/stats" data-nav="stats">Statistics</a>
+      <a class="topbar__link" href="#/audit" data-nav="audit">Audit log</a>
+      <a class="topbar__link topbar__link--portal" href="/">Main site ↗</a>
+      <span class="topbar__who" data-user-name></span>
+      <button class="link-button" type="button" data-sign-out>Sign out</button>
+    </nav>
+  </header>
+
+  <!-- Signed out: the portal's own sign-in, and a way to ask for access ----------------- -->
+  <main class="landing landing--single" data-view="portal-landing" hidden>
+    <section class="auth panel portal-auth" aria-labelledby="portal-title">
+      <form class="form" data-form="portal-login" novalidate>
+        <h1 class="serif auth__title" id="portal-title">Timetable office</h1>
+        <p class="auth__text">Sign in to approve requests and manage rooms and people. Students and lecturers use the <a href="/">main site</a>.</p>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Sign in</button>
+        <p class="auth__forgot"><a class="link-button" href="/">Forgot your password? Reset it on the main site</a></p>
+        <p class="auth__switch">New to the timetable office? <button class="link-button" type="button" data-portal-switch="apply">Request access</button></p>
+      </form>
+
+      <form class="form" data-form="portal-apply" novalidate hidden>
+        <h1 class="serif auth__title">Request timetable office access</h1>
+        <p class="auth__text">Create your account and attach your offer or appointment letter. An existing admin checks it
+          before you get access. Already have an account on the main site? <button class="link-button" type="button" data-portal-switch="login">Sign in here</button> and ask from there.</p>
+        <label class="field">
+          <span class="field__label">Full name</span>
+          <input name="name" autocomplete="name" required minlength="2" maxlength="80">
+        </label>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="email" required>
+        </label>
+        <div data-portal-staff></div>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Create account and send letter</button>
+        <p class="auth__switch"><button class="link-button" type="button" data-portal-switch="login">Back to sign in</button></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Signed in, but not an admin --------------------------------------------------------- -->
+  <main class="landing landing--single" data-view="not-admin" hidden>
+    <section class="auth panel portal-auth">
+      <h1 class="serif auth__title">This area is for the timetable office</h1>
+      <div class="portal-status" data-portal-status></div>
+      <div class="sheet__actions">
+        <a class="button button--primary" href="/">Go to the main site</a>
+        <button class="button button--secondary" type="button" data-sign-out>Sign out</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Approval queue (admins): reads like an inbox ----------------------------------- -->
+  <main class="queue-view" data-view="approvals" hidden>
+    <div class="queue-bar">
+      <div>
+        <h1 class="serif queue-bar__title">Approvals</h1>
+        <p class="mono queue-bar__summary" data-queue-summary></p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Requests">
+        <button class="tab" type="button" role="tab" data-queue-tab="pending" aria-selected="true">Rooms <span class="mono" data-tab-count></span></button>
+        <button class="tab" type="button" role="tab" data-queue-tab="access" aria-selected="false">Staff access <span class="mono" data-tab-count-access></span></button>
+        <button class="tab" type="button" role="tab" data-queue-tab="decided" aria-selected="false">Decided</button>
+      </div>
+      <p class="queue-keys mono" aria-hidden="true"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="queue" data-queue>
+      <ol class="queue__list" data-queue-list role="listbox" aria-label="Requests waiting for a decision" tabindex="0"></ol>
+      <section class="queue__detail" data-queue-detail aria-label="Selected request"></section>
+    </div>
+    <p class="visually-hidden" aria-live="polite" data-queue-live></p>
+  </main>
+
+  <!-- Room management (admins) -------------------------------------------------------- -->
+  <main class="rooms-view" data-view="rooms" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Rooms</h1>
+        <p class="mono page-bar__summary" data-rooms-summary></p>
+      </div>
+      <div class="rooms-filters">
+        <input type="search" placeholder="Search code or name" data-rooms-search aria-label="Search rooms">
+        <select data-rooms-building aria-label="Building"></select>
+        <label class="check"><input type="checkbox" data-rooms-inactive> Show inactive</label>
+      </div>
+      <div class="page-bar__actions">
+        <button class="button button--secondary" type="button" data-add-building>+ Building</button>
+        <button class="button button--primary" type="button" data-add-room>+ Room</button>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="rooms-table" data-rooms-table></div>
+  </main>
+
+  <!-- People (admins) ------------------------------------------------------------------ -->
+  <main class="rooms-view" data-view="people" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">People</h1>
+        <p class="mono page-bar__summary" data-people-summary></p>
+      </div>
+      <div class="rooms-filters">
+        <input type="search" placeholder="Name, email or index number" data-people-search aria-label="Search people">
+        <select data-people-role aria-label="Role">
+          <option value="">All roles</option>
+          <option value="student">Students</option>
+          <option value="lecturer">Lecturers</option>
+          <option value="admin">Admins</option>
+        </select>
+        <select data-people-status aria-label="Status">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="all">Everyone</option>
+        </select>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="rooms-table" data-people-table></div>
+    <p class="board-hint">People register themselves and start as students. Make lecturers and admins here.</p>
+  </main>
+
+  <!-- Statistics (admins) ------------------------------------------------------------ -->
+  <main class="rooms-view stats-view" data-view="stats" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Statistics</h1>
+        <p class="mono page-bar__summary" data-stats-summary></p>
+      </div>
+    </div>
+    <!-- Filters: one row, above everything they scope; date range first. -->
+    <div class="filters" role="group" aria-label="Filters">
+      <select data-stats-range aria-label="Date range">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="next30">Next 30 days</option>
+        <option value="custom">Custom range…</option>
+      </select>
+      <span class="filters__custom" data-stats-custom hidden>
+        <input type="date" class="mono" data-stats-from aria-label="From">
+        <span aria-hidden="true">–</span>
+        <input type="date" class="mono" data-stats-to aria-label="To">
+      </span>
+      <select data-stats-building aria-label="Building"></select>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="stats" data-stats></div>
+    <div class="chart-tip" data-chart-tip role="tooltip" hidden></div>
+  </main>
+
+  <!-- Audit log (admins) --------------------------------------------------------------- -->
+  <main class="rooms-view audit-view" data-view="audit" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Audit log</h1>
+        <p class="mono page-bar__summary">Every sign-in, booking and admin action. Entries can’t be changed or deleted, not even by admins.</p>
+      </div>
+    </div>
+    <section class="security" data-security aria-live="polite"></section>
+    <div class="filters" role="group" aria-label="Filters">
+      <select data-audit-group aria-label="What to show">
+        <option value="all">Everything</option>
+        <option value="security">Security</option>
+        <option value="failed">Failed sign-ins</option>
+        <option value="bookings">Bookings</option>
+        <option value="rooms">Rooms and buildings</option>
+        <option value="people">People and access</option>
+      </select>
+      <input type="search" data-audit-q placeholder="Person’s name or email" aria-label="Person’s name or email">
+      <span class="filters__custom">
+        <input type="date" class="mono" data-audit-from aria-label="From">
+        <span aria-hidden="true">–</span>
+        <input type="date" class="mono" data-audit-to aria-label="To">
+      </span>
+      <a class="link-button filters__csv" data-audit-csv href="#" download>Download CSV</a>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="audit" data-audit></div>
+    <div class="audit-more"><button class="button button--secondary" type="button" data-audit-more hidden>Load older entries</button></div>
+  </main>
+
+  <!-- Editor sheet (rooms, people, access requests) -->
+  <dialog class="sheet" data-edit-sheet aria-labelledby="edit-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="edit-title" data-edit-title>Edit</h2>
+        <button class="link-button sheet__close" type="button" data-edit-close>Close</button>
+      </header>
+      <div data-edit-body></div>
+    </div>
+  </dialog>
+</body>
+</html>
