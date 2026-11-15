@@ -31,6 +31,7 @@
       <a class="topbar__link" href="#/approvals" data-nav="approvals" data-admin-only hidden>Approvals <span class="count mono" data-pending-badge hidden></span></a>
       <a class="topbar__link" href="#/rooms" data-nav="rooms" data-admin-only hidden>Rooms</a>
       <a class="topbar__link" href="#/people" data-nav="people" data-admin-only hidden>People</a>
+      <a class="topbar__link" href="#/stats" data-nav="stats" data-admin-only hidden>Statistics</a>
       <button class="link-button topbar__who" type="button" data-user-name data-account aria-label="Your account and password"></button>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -295,6 +296,35 @@
     <p class="alert" data-error hidden></p>
     <div class="rooms-table" data-people-table></div>
     <p class="board-hint">People register themselves and start as students. Make lecturers and admins here.</p>
+  </main>
+
+  <!-- Statistics (admins) ------------------------------------------------------------ -->
+  <main class="rooms-view stats-view" data-view="stats" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Statistics</h1>
+        <p class="mono page-bar__summary" data-stats-summary></p>
+      </div>
+    </div>
+    <!-- Filters: one row, above everything they scope; date range first. -->
+    <div class="filters" role="group" aria-label="Filters">
+      <select data-stats-range aria-label="Date range">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="next30">Next 30 days</option>
+        <option value="custom">Custom range…</option>
+      </select>
+      <span class="filters__custom" data-stats-custom hidden>
+        <input type="date" class="mono" data-stats-from aria-label="From">
+        <span aria-hidden="true">–</span>
+        <input type="date" class="mono" data-stats-to aria-label="To">
+      </span>
+      <select data-stats-building aria-label="Building"></select>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="stats" data-stats></div>
+    <div class="chart-tip" data-chart-tip role="tooltip" hidden></div>
   </main>
 
   <!-- Room / building editor: same sliding glass sheet as booking -------------------- -->

@@ -4,6 +4,7 @@ const bookings = require('../services/bookings');
 const roomAdmin = require('../services/roomAdmin');
 const userAdmin = require('../services/userAdmin');
 const access = require('../services/access');
+const stats = require('../services/stats');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
@@ -105,6 +106,10 @@ router.post('/access-requests/:id/reject', async (req, res) => {
   res.json(await access.decide(req.user, parseId(req.params.id, 'Request'), 'rejected', req.body?.reason, { ip: req.ip }));
 });
 
-// Stats and the audit log come next.
+/* ---------- Statistics ---------------------------------------------------------------- */
+
+router.get('/stats', async (req, res) => res.json(await stats.overview(req.query)));
+
+// The audit log comes next.
 
 module.exports = router;

@@ -47,6 +47,13 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   works until that's done. Everyone can change their password from their name in the top bar, which
   signs out their other devices
 
+- Statistics for admins (Statistics in the top bar), for any date range and building: room
+  utilisation (hours booked ÷ hours available, 07:00–21:00 on teaching days, approved bookings only)
+  with the change against the previous period; bookings, hours, student requests and the median time
+  to a decision; busiest hours; what rooms are booked for; utilisation per room with plain-language
+  notes on under-used and over-sized rooms. Every chart has a table view, and room figures download
+  as CSV
+
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally

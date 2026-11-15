@@ -820,3 +820,98 @@ describe('passwords', () => {
     assert.equal(res.status, 200);
   });
 });
+
+describe('statistics', () => {
+  let admin; let lecturer; let student;
+  // A fixed past Monday–Sunday week, so the numbers are exact.
+  const monday = '2026-10-05';
+  const day = (n) => addDays(monday, n);
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('stats@campus.test', 'admin');
+    lecturer = await signedIn('kumi@campus.test', 'lecturer');
+    student = await signedIn('yaa@campus.test');
+    const add = async (code, who, date, start, end, status, extra = {}) => db.run(
+      `INSERT INTO bookings (room_id, user_id, title, category, date, start_time, end_time, attendees, status, decided_by, created_at, updated_at)
+       VALUES (?, ?, 'X', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [await roomId(code), who, extra.category || 'lecture', date, start, end, extra.attendees || 10, status,
+        extra.decidedBy || null, extra.created || `${date} 08:00`, extra.updated || `${date} 08:00`],
+    );
+    // LT-1: 2 h Monday + 3 h Wednesday; LT-2: 1 h Monday 09:30–10:30 (spans two clock hours)
+    await add('LT-1', lecturer.user.id, day(0), '08:00', '10:00', 'approved', { attendees: 150 });
+    await add('LT-1', lecturer.user.id, day(2), '09:00', '12:00', 'approved');
+    await add('LT-2', admin.user.id, day(0), '09:30', '10:30', 'approved', { category: 'exam' });
+    // Student requests: one approved after 4 h, one rejected after 2 h, one waiting; plus a cancellation
+    await add('LIB-S1', student.user.id, day(1), '10:00', '11:00', 'approved',
+      { category: 'study', decidedBy: admin.user.id, created: `${day(0)} 08:00`, updated: `${day(0)} 12:00` });
+    await add('LIB-S2', student.user.id, day(1), '10:00', '11:00', 'rejected',
+      { category: 'study', decidedBy: admin.user.id, created: `${day(0)} 08:00`, updated: `${day(0)} 10:00` });
+    await add('LIB-S3', student.user.id, day(3), '10:00', '11:00', 'pending', { category: 'study' });
+    await add('LT-3', lecturer.user.id, day(4), '10:00', '11:00', 'cancelled');
+    // Outside the range: must not count
+    await add('LT-1', lecturer.user.id, day(9), '08:00', '12:00', 'approved');
+  });
+
+  const get = (q) => admin.get(`/api/admin/stats?from=${monday}&to=${day(6)}${q || ''}`);
+
+  test('only admins can see statistics', async () => {
+    assert.equal((await lecturer.get('/api/admin/stats')).status, 403);
+  });
+
+  test('headline numbers and utilisation over teaching days', async () => {
+    const { body } = await get();
+    assert.equal(body.range.days, 7);
+    assert.equal(body.range.teachingDays, 5);
+    assert.equal(body.current.bookings, 4);              // approved only
+    assert.equal(body.current.hours, 7);                 // 2 + 3 + 1 + 1
+    assert.equal(body.current.cancelled, 1);
+    // 16 rooms × 5 days × 14 h = 1120 h available
+    assert.ok(Math.abs(body.current.utilisation - 7 / 1120) < 1e-9);
+  });
+
+  test('per-room utilisation, ranked, with average fill', async () => {
+    const { body } = await get();
+    assert.equal(body.rooms.length, 16);
+    assert.equal(body.rooms[0].code, 'LT-1');
+    assert.equal(body.rooms[0].hours, 5);
+    assert.ok(Math.abs(body.rooms[0].utilisation - 5 / 70) < 1e-9); // 5 days × 14 h
+    assert.equal(body.rooms[0].avg_fill, Math.round(((150 + 10) / 2 / 300) * 100) / 100);
+    assert.equal(body.rooms.find((r) => r.code === 'NAB-206').hours, 0);
+  });
+
+  test('busiest hours split bookings across clock hours', async () => {
+    const { body } = await get();
+    assert.equal(body.hours.length, 14);
+    assert.deepEqual(body.hours.map((h) => h.hour), [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    const at = (h) => body.hours.find((x) => x.hour === h).hours;
+    assert.equal(at(8), 1);      // LT-1 Mon 08–09
+    assert.equal(at(9), 2.5);    // LT-1 Mon 09–10, LT-1 Wed 09–10, LT-2 09:30–10:00
+    assert.equal(at(10), 2.5);   // LT-2 Mon 10:00–10:30, LT-1 Wed 10–11, LIB-S1 Tue 10–11 (rejected/pending don't count)
+    assert.equal(at(11), 1);     // LT-1 Wed 11–12
+    assert.equal(at(7), 0);
+  });
+
+  test('categories and student requests', async () => {
+    const { body } = await get();
+    assert.deepEqual(body.categories.map((c) => [c.category, c.hours]), [['lecture', 5], ['exam', 1], ['study', 1]]);
+    assert.deepEqual(body.requests, { total: 3, pending: 1, approved: 1, rejected: 1, medianDecisionHours: 3 });
+  });
+
+  test('comparison with the previous period and a building filter', async () => {
+    const { body } = await get();
+    assert.equal(body.previousRange.to, addDays(monday, -1));
+    assert.equal(body.previous.bookings, 0);
+    const ltb = (await db.get("SELECT id FROM buildings WHERE code = 'LTB'")).id;
+    const only = (await get(`&buildingId=${ltb}`)).body;
+    assert.equal(only.rooms.length, 3);
+    assert.equal(only.current.hours, 6);
+    assert.equal(only.categories.find((c) => c.category === 'study'), undefined);
+  });
+
+  test('bad ranges are refused', async () => {
+    assert.equal((await admin.get('/api/admin/stats?from=2026-10-10&to=2026-10-01')).status, 400);
+    assert.equal((await admin.get('/api/admin/stats?from=2024-01-01&to=2026-01-01')).status, 400);
+    assert.equal((await admin.get('/api/admin/stats?from=nope')).status, 400);
+  });
+});

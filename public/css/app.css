@@ -840,9 +840,101 @@ kbd {
 .check--block { align-items: flex-start; white-space: normal; font-size: 13px; color: var(--text-strong); }
 .check--block input { margin-top: 2px; flex: none; }
 
+/* ---------- Statistics -------------------------------------------------------------- */
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.filters select { width: auto; min-width: 180px; }
+.filters__custom { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.filters__custom input { width: 160px; }
+
+.stats { display: grid; gap: 18px; transition: opacity .2s; }
+.stats.is-loading { opacity: .5; }
+
+.kpis {
+  display: grid; grid-template-columns: minmax(240px, 1.5fr) repeat(4, minmax(150px, 1fr));
+  border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--ink); overflow: hidden;
+}
+.kpi { padding: 18px 20px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 6px; }
+.kpi:first-child { border-left: 0; }
+.kpi__label { font: 500 10px/1.2 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+.kpi__value { font-size: 34px; line-height: 1; color: var(--text-strong); }
+.kpi--hero .kpi__value { font-size: clamp(48px, 5vw, 64px); letter-spacing: -0.02em; }
+.kpi__note { font-size: 12px; color: var(--text); line-height: 1.45; }
+
+.stat-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; }
+.stat-card { background: var(--ink); border: 1px solid var(--line); min-width: 0; }
+.stat-card--rooms { grid-column: 1 / -1; }
+.stat-card__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 16px; margin-bottom: 18px; }
+.stat-card__title { margin: 0; font-size: 16px; font-weight: 500; color: var(--text-strong); }
+.stat-card__sub { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.stat-card__tools { display: flex; gap: 16px; font-size: 12px; }
+.stat-empty { padding: 24px 0; color: var(--text-muted); font-size: 13px; }
+.stat-note { margin-bottom: 14px; font-size: 13px; color: var(--text); max-width: 760px; }
+.stat-note::before { content: '■ '; font-size: 9px; vertical-align: 1px; color: var(--text-strong); }
+
+/* Column chart: bars <= 24px, 4px rounded top, square at the baseline; hairline solid grid. */
+.colchart { --plot-h: 220px; }
+.colchart__plot { position: relative; height: var(--plot-h); margin-left: 44px; }
+.colchart__grid { position: absolute; left: 0; right: 0; border-top: 1px solid rgb(var(--bone-rgb) / 0.1); }
+.colchart__grid:first-child { border-top-color: rgb(var(--bone-rgb) / 0.3); }
+.colchart__tick { position: absolute; right: calc(100% + 8px); top: -7px; font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+.colchart__cols { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.colchart__col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 4px; outline-offset: 2px; }
+.colchart__col:hover { background: rgb(var(--bone-rgb) / 0.05); }
+.colchart__bar { width: min(24px, 70%); border-radius: 4px 4px 0 0; background: rgb(var(--bone-rgb) / 0.42); transition: background .15s; }
+.colchart__col:hover .colchart__bar, .colchart__col:focus-visible .colchart__bar { background: rgb(var(--bone-rgb) / 0.62); }
+.colchart__col.is-top .colchart__bar { background: var(--bone); }
+.colchart__cap { position: absolute; transform: translateY(-4px); padding-bottom: 2px; font-size: 11px; color: var(--text-strong); white-space: nowrap; }
+.colchart__axis { display: flex; gap: 2px; margin: 8px 0 0 44px; font-size: 10px; color: var(--text-muted); }
+.colchart__axis span { flex: 1; text-align: center; }
+
+/* Ranked horizontal bars: one hue, value at the tip. */
+.hbars { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hbars__row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: center; border-radius: 4px; outline-offset: 3px; }
+.hbars__label { font-size: 13px; color: var(--text-strong); }
+.hbars__track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hbars__bar { height: 18px; min-width: 2px; border-radius: 0 4px 4px 0; background: rgb(var(--bone-rgb) / 0.62); }
+.hbars__row:hover .hbars__bar, .hbars__row:focus-visible .hbars__bar { background: rgb(var(--bone-rgb) / 0.85); }
+.hbars__val { font-size: 12px; color: var(--text); white-space: nowrap; }
+
+/* Meter list: each room against 100% of its own time; the track is a lighter step of the same hue. */
+.meters { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 2px 32px; }
+.meters__row {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr) 120px 52px; grid-template-areas: "code name meter fig" ". sub sub sub";
+  gap: 0 12px; align-items: center; padding: 8px 6px; border-radius: 4px; outline-offset: 2px;
+}
+.meters__row:hover { background: rgb(var(--bone-rgb) / 0.04); }
+.meters__code { grid-area: code; font-size: 13px; color: var(--text-strong); }
+.meters__name { grid-area: name; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter { grid-area: meter; display: block; height: 8px; border-radius: 4px; background: rgb(var(--bone-rgb) / 0.12); overflow: hidden; }
+.meter__fill { display: block; height: 100%; min-width: 0; border-radius: 4px; background: rgb(var(--bone-rgb) / 0.75); }
+.meters__fig { grid-area: fig; text-align: right; font-size: 13px; color: var(--text-strong); }
+.meters__sub { grid-area: sub; font-size: 11px; color: var(--text-muted); }
+.meters__row.is-idle .meters__code { color: var(--text-muted); }
+
+.stat-table { overflow-x: auto; }
+.stat-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.stat-table th, .stat-table td { padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; font-weight: 400; }
+.stat-table thead th { border-top: 0; font: 500 10px/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.stat-table tbody th { color: var(--text-strong); }
+.stat-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Tooltip: the value leads, the label follows. */
+.chart-tip {
+  position: fixed; z-index: 50; pointer-events: none; display: grid; gap: 2px; max-width: 260px;
+  padding: 8px 10px; border-radius: 6px; background: var(--bone); color: var(--ink); box-shadow: var(--shadow); font-size: 12px;
+}
+.chart-tip strong { font: 500 15px/1.2 var(--mono); }
+
 /* ---------- Small screens ------------------------------------------------------------- */
 
 @media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi { border-left: 0; border-top: 1px solid var(--line); }
+  .kpi--hero { grid-column: 1 / -1; border-top: 0; }
+  .kpi:nth-child(2n+1):not(.kpi--hero) { border-left: 1px solid var(--line); }
+  .stat-grid { grid-template-columns: 1fr; }
+  .meters { grid-template-columns: 1fr; }
   /* The rooms table becomes one card per room. */
   .rt-row--head { display: none; }
   .rt-row { grid-template-columns: 80px minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; }
@@ -915,6 +1007,13 @@ kbd {
   .page-bar__actions { margin-left: 0; width: 100%; }
   .page-bar__actions .button { flex: 1; }
   .rt-row, .rt-group__head { padding-left: 14px; padding-right: 14px; }
+  .filters select, .filters__custom { flex: 1 1 100%; }
+  .filters__custom input { flex: 1; width: auto; min-width: 0; }
+  .kpi:nth-child(2n+1):not(.kpi--hero) { border-left: 0; }
+  .kpis { grid-template-columns: 1fr; }
+  .meters__row { grid-template-columns: 64px minmax(0, 1fr) 48px; grid-template-areas: "code name fig" "meter meter meter" "sub sub sub"; gap: 4px 10px; }
+  .hbars__row { grid-template-columns: 1fr; gap: 4px; }
+  .colchart__axis span:nth-child(even) { visibility: hidden; }
 }
 
 /* ---------- Motion preferences --------------------------------------------------------- */

@@ -4,6 +4,7 @@ import { showBoard, hideBoard } from './board.js';
 import { showApprovals, pendingCount } from './approvals.js';
 import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
+import { showStats } from './stats.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
@@ -448,9 +449,9 @@ async function enterApp(user) {
   await route();
 }
 
-const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people' };
-const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms', 'people'];
-const ADMIN_PAGES = ['approvals', 'rooms', 'people'];
+const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people', '#/stats': 'stats' };
+const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms', 'people', 'stats'];
+const ADMIN_PAGES = ['approvals', 'rooms', 'people', 'stats'];
 
 /** Signed-in pages: "#/" dashboard, "#/board" day board; admins also approvals, rooms and people. */
 async function route() {
@@ -466,6 +467,7 @@ async function route() {
   if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
   // After a room edit, refresh the cached building and facility lists used by the board and search.
   if (page === 'people') showPeople({ me: state.user });
+  if (page === 'stats') showStats({ buildings: state.meta.buildings });
   if (page === 'rooms') showRooms({ onChange: async () => { state.meta = await api('/rooms/meta'); } });
   if (page === 'dashboard') await loadDashboard();
 }
