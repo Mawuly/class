@@ -26,7 +26,9 @@ Every feature in the project plan is built.
 **Accounts and security**
 - Staff verification: lecturers and admins upload an offer or appointment letter, checked by an admin; the letter is deleted after the decision and only its SHA-256 fingerprint is kept
 - Passwords hashed with bcrypt; sessions in an `httpOnly` cookie; every login token carries a session version, so a reset or password change signs out every device
-- Forgot password by a 6-digit code sent to your email (valid 10 minutes, 5 tries, newest code only, at most one a minute and five an hour, stored as a keyed hash); without email set up, through the timetable office with a one-time temporary password
+- Forgot password by a 6-digit code texted through Arkesel to a confirmed phone number, or emailed to people without one (valid 10 minutes, 5 tries, newest code only, at most one a minute and five an hour, stored as a keyed hash); otherwise through the timetable office with a one-time temporary password
+- Phone numbers only receive reset codes after their owner confirms them with a texted code
+- Show / Hide on every password field
 - **Double booking is impossible at the database level:** Postgres exclusion constraints per room and per person
 - The audit log is append-only: a database trigger refuses any change or deletion
 - CSRF header check, rate-limited sign-in, strict Content Security Policy, Row Level Security on every table
@@ -100,6 +102,31 @@ Optional settings (Vercel → Settings → Environment Variables):
 To use your campus's real rooms, sign in as admin and open **Rooms**: add your buildings and rooms,
 and delete the demo ones (any demo room that was never booked can be deleted; booked ones can be
 deactivated).
+
+### Optional: password reset codes by text message (Arkesel)
+
+With Arkesel set up, people add their Ghana mobile number under their name in the top bar, confirm it
+with a texted code, and then get reset codes by text. People without a confirmed number get them by
+email (if set up below), or through the timetable office.
+
+1. Create an account at arkesel.com and buy some SMS credit.
+2. Register a **sender ID** (up to 11 letters, e.g. `LectRooms`) and wait for Arkesel to approve it.
+3. Copy your **API key** from the Arkesel dashboard (SMS API, version 2).
+4. In Vercel → Settings → Environment Variables add:
+
+| Name | Value |
+|---|---|
+| `ARKESEL_API_KEY` | your API key |
+| `ARKESEL_SENDER_ID` | your approved sender ID |
+| `ARKESEL_SANDBOX` | `true` for a first test (Arkesel accepts the message but doesn't send or charge); remove it afterwards |
+
+5. Redeploy. `/api/health` shows `"passwordReset": "by code: text message …"`.
+6. With the sandbox on, add your number under your name: if no error appears, Arkesel accepted the
+   request. Then remove `ARKESEL_SANDBOX`, redeploy, and try again: the code should arrive on your phone.
+
+If Arkesel refuses a message, the reason (wrong key, sender ID not approved, no credit) is in Vercel →
+Deployments → Logs and in the audit log. The request format lives in `src/services/sms.js`; if Arkesel
+changes its API, that is the only file to update (`ARKESEL_URL` overrides the address).
 
 ### Optional: password reset codes by email
 

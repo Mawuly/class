@@ -28,9 +28,11 @@ router.get('/', async (req, res) => {
     }
   }
   // Not a problem, just how "Forgot password" works on this site.
-  report.passwordReset = require('../services/mail').mode() === 'smtp'
-    ? 'by emailed code'
-    : config.isProd ? 'through the timetable office (add SMTP settings to send codes by email)' : 'by code, printed in the server console';
+  const smsOn = require('../services/sms').mode() === 'arkesel';
+  const mailOn = require('../services/mail').mode() === 'smtp';
+  report.passwordReset = smsOn || mailOn
+    ? `by code: ${[smsOn && `text message${config.sms.sandbox ? ' (Arkesel sandbox: nothing is really sent)' : ''}`, mailOn && 'email'].filter(Boolean).join(', then ')}`
+    : config.isProd ? 'through the timetable office (add Arkesel or SMTP settings to send codes)' : 'by code, printed in the server console';
   report.ok = report.problems.length === 0;
   res.status(report.ok ? 200 : 503).json(report);
 });

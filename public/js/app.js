@@ -7,6 +7,8 @@ import { showPeople } from './people-admin.js';
 import { showStats } from './stats.js';
 import { showAudit } from './audit.js';
 import { openCalendarSheet } from './calendar.js';
+import { phoneSection } from './phone.js';
+import { startPasswordToggles } from './password-toggle.js';
 import { showWeek, hideWeek, weekHref } from './week.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
@@ -112,11 +114,25 @@ function switchForm(name) {
 }
 
 /** Explains the right steps: a code by email, or the timetable office if email isn't set up. */
+async function resetOptions() {
+  state.resetOptions ??= await api('/auth/options').catch(() => ({ resetByCode: false, channels: {} }));
+  return state.resetOptions;
+}
+
+/** Where a code goes, in words: "by text message to … or by email if …". */
+function codeRoute({ sms, email }) {
+  if (sms && email) return 'by text message to the phone number on your account, or by email if no phone number is saved';
+  if (sms) return 'by text message to the phone number on your account';
+  return 'by email';
+}
+
 async function showResetMethod() {
-  state.resetOptions ??= await api('/auth/options').catch(() => ({ resetByEmail: false }));
-  const byEmail = state.resetOptions.resetByEmail;
-  for (const el of $$('[data-reset-by]')) el.hidden = el.dataset.resetBy !== (byEmail ? 'email' : 'office');
-  $('[data-forgot-submit]').textContent = byEmail ? 'Send me a code' : 'Tell the timetable office';
+  const o = await resetOptions();
+  for (const el of $$('[data-reset-by]')) el.hidden = el.dataset.resetBy !== (o.resetByCode ? 'email' : 'office');
+  if (o.resetByCode) {
+    $('[data-reset-by="email"]').textContent = `Enter the email you registered with. We’ll send a 6-digit code ${codeRoute(o.channels)}.`;
+  }
+  $('[data-forgot-submit]').textContent = o.resetByCode ? 'Send me a code' : 'Tell the timetable office';
 }
 
 async function submitAuth(form, path) {
@@ -433,7 +449,7 @@ async function refreshAfterChange() {
 }
 
 async function loadDashboard() {
-  const [mine, notes] = await Promise.all([api('/bookings/mine'), api('/notifications'), loadAccessBanner()]);
+  const [mine, notes] = await Promise.all([api('/bookings/mine'), api('/notifications'), loadAccessBanner(), showPhonePrompt()]);
   renderNext(mine.bookings);
   renderUpcoming(mine.bookings);
   renderNotes(notes);
@@ -540,8 +556,10 @@ function openCodeStep(email, minutes) {
   const form = $('[data-form="reset-code"]');
   form.reset();
   showError(form, '');
-  $('[data-code-sent]', form).textContent = `If ${email} has an account, we’ve sent it a 6-digit code. `
-    + `It works for ${minutes} minutes. Enter it with your new password.`;
+  const ch = state.resetOptions?.channels || { email: true };
+  $('[data-code-title]', form).textContent = ch.sms ? 'Check your phone' : 'Check your email';
+  $('[data-code-sent]', form).textContent = `If ${email} has an account, we’ve sent a 6-digit code ${codeRoute(ch)}. `
+    + `It works for ${minutes} minutes.`;
   switchForm('reset-code');
   startResendWait();
 }
@@ -644,7 +662,8 @@ async function submitNewPassword(form) {
   }
 }
 
-function openAccountSheet() {
+async function openAccountSheet() {
+  await resetOptions();
   const u = state.user;
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', { class: 'field__label' }, label), input,
     hint ? h('span', { class: 'field__hint' }, hint) : null);
@@ -686,8 +705,16 @@ function openAccountSheet() {
       h('p', { class: 'requester__meta mono' }, u.email),
       h('p', { class: 'requester__ago' }, [u.role[0].toUpperCase() + u.role.slice(1), u.department, u.indexNumber && `Index ${u.indexNumber}`]
         .filter(Boolean).join(' · '))),
+    state.resetOptions?.channels?.sms ? phoneSection(u, (phone) => { u.phone = phone; showPhonePrompt(); }) : null,
     form);
   current.focus();
+}
+
+/** When codes can be texted, nudge people without a confirmed number to add one. */
+async function showPhonePrompt() {
+  const prompt = $('[data-phone-prompt]');
+  const o = await resetOptions();
+  prompt.hidden = !(o.channels?.sms && state.user && !state.user.phone);
 }
 
 function leaveApp() {
@@ -710,6 +737,7 @@ function leaveApp() {
 /* ---------- Start ------------------------------------------------------------------ */
 
 function init() {
+  startPasswordToggles();
   tickClock();
   setInterval(tickClock, 1000);
   startFootage();
@@ -741,6 +769,7 @@ function init() {
   $('[data-form="new-password"]').addEventListener('submit', (e) => { e.preventDefault(); submitNewPassword(e.target); });
   $('[data-account]').addEventListener('click', openAccountSheet);
   $('[data-calendar]').addEventListener('click', openCalendarSheet);
+  $('[data-phone-prompt] button').addEventListener('click', openAccountSheet);
   // The server says a new password is needed (e.g. reset by an admin while this tab was open).
   window.addEventListener('must-change-password', () => {
     if (!state.user) return;

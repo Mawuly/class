@@ -14,7 +14,7 @@ const PASSWORD = 'Testing123';
 /** Empties the test database and loads the standard buildings and rooms. */
 async function resetDb() {
   await migrate(db);
-  await db.pool.query(`TRUNCATE password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users
+  await db.pool.query(`TRUNCATE phone_verifications, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users
                        RESTART IDENTITY CASCADE`);
   await seedReference(db);
 }

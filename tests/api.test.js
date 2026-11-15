@@ -273,7 +273,7 @@ describe('zero-step setup', () => {
   const { resetSetupState } = require('../src/db/setup');
 
   test('a brand-new empty database gets its tables and rooms on the first request', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS app_meta, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, phone_verifications, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const res = await agent().get('/api/public/now');
     assert.equal(res.status, 200);
@@ -285,7 +285,7 @@ describe('zero-step setup', () => {
   });
 
   test('setup runs safely when several requests arrive at once', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS app_meta, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, phone_verifications, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const results = await Promise.all([1, 2, 3, 4].map(() => agent().get('/api/public/now')));
     assert.deepEqual(results.map((r) => r.status), [200, 200, 200, 200]);
@@ -797,7 +797,9 @@ describe('passwords', () => {
 
   test('forgot password without email set up: same answer for any email, admins told at most once an hour, flag shown until reset', async () => {
     const mail = require('../src/services/mail');
+    const sms = require('../src/services/sms');
     mail.setModeForTests(null);
+    sms.setModeForTests(null);
     try {
     const known = await agent().post('/api/auth/forgot-password').send({ email: 'AMA.FORGOT@campus.test' });
     const unknown = await agent().post('/api/auth/forgot-password').send({ email: 'nobody@campus.test' });
@@ -815,6 +817,7 @@ describe('passwords', () => {
     assert.equal(after.must_change_password, true);
     } finally {
       mail.setModeForTests(undefined);
+      sms.setModeForTests(undefined);
     }
   });
 
@@ -1226,7 +1229,7 @@ describe('password reset by emailed code', () => {
   test('a code is emailed; the reply is the same for unknown emails', async () => {
     const known = await ask('OTP.Person@campus.test');
     const unknown = await ask('nobody@campus.test');
-    assert.deepEqual(known.body, { ok: true, method: 'code', minutes: 10 });
+    assert.deepEqual(known.body, { ok: true, method: 'code', minutes: 10, channels: { sms: true, email: true } });
     assert.deepEqual(unknown.body, known.body);
     assert.equal(mail.outbox.length, 1);
     assert.equal(mail.outbox[0].to, EMAIL);
@@ -1312,5 +1315,112 @@ describe('password reset by emailed code', () => {
     const rows = await db.all("SELECT action, details FROM audit_log WHERE action LIKE 'auth.reset%' ORDER BY id");
     assert.deepEqual(rows.map((r) => r.action), ['auth.reset_code_sent', 'auth.reset_code_wrong', 'auth.reset_with_code']);
     assert.ok(!JSON.stringify(rows).includes(codeFromMail()));
+  });
+});
+
+describe('phone numbers and text-message codes', () => {
+  const sms = require('../src/services/sms');
+  const mail = require('../src/services/mail');
+  const { normalizeGhana, displayPhone, maskPhone } = require('../src/utils/phone');
+  const EMAIL = 'texted@campus.test';
+  let person;
+
+  beforeEach(async () => {
+    await resetDb();
+    sms.outbox.length = 0;
+    mail.outbox.length = 0;
+    person = await signedIn(EMAIL);
+  });
+  const smsCode = () => sms.outbox.at(-1)?.message.match(/(\d{3}) (\d{3})/).slice(1).join('');
+  const backdate = (table) => db.pool.query(`UPDATE ${table} SET created_at = created_at - interval '61 seconds'`);
+  const verify = async (who, number = '024 123 4567') => {
+    const start = await who.post('/api/auth/phone').send({ phone: number });
+    assert.equal(start.status, 200, JSON.stringify(start.body));
+    return who.post('/api/auth/phone/verify').send({ code: smsCode() });
+  };
+
+  test('Ghana numbers in any common format', () => {
+    for (const n of ['0241234567', '024 123 4567', '+233 24 123 4567', '233241234567', '00233241234567', '241234567', '024-123-4567']) {
+      assert.equal(normalizeGhana(n), '233241234567', n);
+    }
+    assert.equal(normalizeGhana('0551234567'), '233551234567');
+    for (const bad of ['', '12345', '0311234567', '+44 7700 900123', '02412345678', 'abc']) assert.equal(normalizeGhana(bad), null, bad);
+    assert.equal(displayPhone('233241234567'), '024 123 4567');
+    assert.equal(maskPhone('233241234567'), '024 ••• 4567');
+  });
+
+  test('a phone number is saved only after the texted code is typed in', async () => {
+    const start = await person.post('/api/auth/phone').send({ phone: '+233 24 123 4567' });
+    assert.deepEqual(start.body, { phone: '024 123 4567', minutes: 10 });
+    assert.equal(sms.outbox[0].to, '233241234567');
+    assert.ok(sms.outbox[0].message.length <= 160);
+    assert.equal((await person.get('/api/auth/me')).body.user.phone, null); // not yet
+    assert.equal((await person.post('/api/auth/phone/verify').send({ code: '000000' === smsCode() ? '111111' : '000000' })).status, 400);
+    const ok = await person.post('/api/auth/phone/verify').send({ code: smsCode() });
+    assert.deepEqual(ok.body, { phone: '024 123 4567' });
+    assert.equal((await person.get('/api/auth/me')).body.user.phone, '024 123 4567');
+  });
+
+  test('bad numbers, numbers on another account, and too many codes are refused', async () => {
+    assert.equal((await person.post('/api/auth/phone').send({ phone: '12345' })).status, 400);
+    await verify(person);
+    const other = await signedIn('other.phone@campus.test');
+    const taken = await other.post('/api/auth/phone').send({ phone: '0241234567' });
+    assert.equal(taken.status, 409);
+    await other.post('/api/auth/phone').send({ phone: '0551112222' });
+    const soon = await other.post('/api/auth/phone').send({ phone: '0551112222' });
+    assert.equal(soon.status, 429);
+  });
+
+  test('five wrong codes use it up', async () => {
+    await person.post('/api/auth/phone').send({ phone: '0241234567' });
+    const right = smsCode();
+    const wrong = right === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) await person.post('/api/auth/phone/verify').send({ code: wrong });
+    assert.equal((await person.post('/api/auth/phone/verify').send({ code: right })).status, 400);
+  });
+
+  test('with a verified phone, the reset code comes by text, not email', async () => {
+    await verify(person);
+    sms.outbox.length = 0;
+    await agent().post('/api/auth/forgot-password').send({ email: EMAIL });
+    assert.equal(mail.outbox.length, 0);
+    assert.equal(sms.outbox.length, 1);
+    assert.match(sms.outbox[0].message, /^Lecture Rooms: your password reset code is \d{3} \d{3}\. Valid 10 min\. Never share it\.$/);
+    assert.ok(sms.outbox[0].message.length <= 160);
+    assert.ok(/^[\x20-\x7e]+$/.test(sms.outbox[0].message), 'plain characters only, so it is one SMS');
+    const a = agent();
+    const res = await a.post('/api/auth/reset-password').send({ email: EMAIL, code: smsCode(), newPassword: 'Texted99x' });
+    assert.equal(res.status, 200);
+    const row = await db.get('SELECT channel FROM password_resets');
+    assert.equal(row.channel, 'sms');
+  });
+
+  test('without a phone the code goes by email; with neither, the office is told', async () => {
+    const admin = await signedIn('office.phone@campus.test', 'admin');
+    await agent().post('/api/auth/forgot-password').send({ email: EMAIL });
+    assert.equal(sms.outbox.length, 0);
+    assert.equal(mail.outbox.length, 1);
+    mail.setModeForTests(null);
+    try {
+      await backdate('password_resets');
+      const reply = await agent().post('/api/auth/forgot-password').send({ email: EMAIL });
+      assert.equal(reply.body.method, 'code'); // texts are on, so the page still says "code"...
+      const notes = (await admin.get('/api/notifications')).body.notifications;
+      assert.match(notes[0].message, /has forgotten their password/); // ...but this person has no phone, so the office is told
+    } finally {
+      mail.setModeForTests(undefined);
+    }
+  });
+
+  test('removing the number stops text codes; the audit log has each step', async () => {
+    await verify(person);
+    await person.delete('/api/auth/phone');
+    assert.equal((await person.get('/api/auth/me')).body.user.phone, null);
+    sms.outbox.length = 0;
+    await agent().post('/api/auth/forgot-password').send({ email: EMAIL });
+    assert.equal(sms.outbox.length, 0);
+    const actions = (await db.all("SELECT action FROM audit_log WHERE action LIKE 'phone.%' ORDER BY id")).map((r) => r.action);
+    assert.deepEqual(actions, ['phone.code_sent', 'phone.verified', 'phone.removed']);
   });
 });

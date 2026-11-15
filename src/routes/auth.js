@@ -9,6 +9,9 @@ const { AppError } = require('../utils/errors');
 const { EMAIL_RE, passwordProblem } = require('../utils/validate');
 const { audit } = require('../services/audit');
 const mail = require('../services/mail');
+const sms = require('../services/sms');
+const phone = require('../services/phone');
+const { displayPhone } = require('../utils/phone');
 const passwordReset = require('../services/passwordReset');
 const { setSession, clearSession, requireAuth } = require('../middleware/auth');
 
@@ -32,6 +35,7 @@ function getDummyHash() {
 const publicUser = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role, department: u.department, indexNumber: u.index_number,
   mustChangePassword: Boolean(u.must_change_password),
+  phone: u.phone_verified_at ? displayPhone(u.phone) : null,
 });
 
 router.post('/register', authLimiter, async (req, res) => {
@@ -75,7 +79,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
   const user = await db.get(
     `SELECT id, name, email, role, department, index_number, password_hash, is_active,
-            must_change_password, temp_password_expires_at, session_version
+            must_change_password, temp_password_expires_at, session_version, phone, phone_verified_at
      FROM users WHERE lower(email) = ?`,
     [email],
   );
@@ -123,7 +127,8 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
   const user = await db.get(
     `UPDATE users SET password_hash = ?, must_change_password = false, temp_password_expires_at = NULL,
             session_version = session_version + 1, password_changed_at = now()
-     WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version`,
+     WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version,
+                 phone, phone_verified_at`,
     [await bcrypt.hash(newPassword, config.bcryptCost), req.user.id],
   );
   await audit({ userId: user.id, action: 'auth.change_password', entity: 'user', entityId: user.id,
@@ -132,45 +137,45 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-/**
- * "Forgot password": the app can't send email, so the timetable office is told instead and
- * resets the password in person. The answer is the same whether or not the email exists,
- * so nobody can use this to find out who has an account. At most one note per person per hour.
+/*
+ * "Forgot password". The answer is the same whether or not the email exists, so nobody can use
+ * this to find out who has an account.
  */
+const codesOn = () => sms.enabled() || mail.enabled();
+const channels = () => ({ sms: sms.enabled(), email: mail.enabled() });
+
 router.post('/forgot-password', authLimiter, async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254);
-  // With email set up, send a 6-digit code. The reply never says whether the account exists.
-  if (mail.enabled()) {
+  // With text messages or email set up, a 6-digit code is sent (by text to a verified phone,
+  // else by email). The reply never says whether the account exists.
+  if (codesOn()) {
     if (EMAIL_RE.test(email)) await passwordReset.requestCode(email, { ip: req.ip });
-    return res.json({ ok: true, method: 'code', minutes: passwordReset.CODE_MINUTES });
+    return res.json({ ok: true, method: 'code', minutes: passwordReset.CODE_MINUTES, channels: channels() });
   }
-  // Without email, the timetable office is told and resets it in person.
-  const user = EMAIL_RE.test(email)
-    ? await db.get('SELECT id, name, email FROM users WHERE lower(email) = ? AND is_active', [email])
-    : null;
-  if (user) {
-    const recent = await db.get(
-      `SELECT 1 AS yes FROM audit_log WHERE user_id = ? AND action = 'auth.reset_requested'
-         AND created_at > now() - interval '1 hour'`,
-      [user.id],
-    );
-    if (!recent) {
-      await db.tx(async (x) => {
-        const admins = await x.all("SELECT id FROM users WHERE role = 'admin' AND is_active AND id <> ?", [user.id]);
-        for (const a of admins) {
-          await x.run('INSERT INTO notifications (user_id, message) VALUES (?, ?)',
-            [a.id, `${user.name} (${user.email}) has forgotten their password. Check their ID, then reset it under People.`]);
-        }
-        await audit({ userId: user.id, action: 'auth.reset_requested', entity: 'user', entityId: user.id, ip: req.ip }, x);
-      });
-    }
+  // With neither, the timetable office is told and resets it in person.
+  if (EMAIL_RE.test(email)) {
+    const user = await db.get('SELECT id, name, email FROM users WHERE lower(email) = ? AND is_active', [email]);
+    if (user) await passwordReset.notifyOffice(user, req.ip);
   }
   res.json({ ok: true, method: 'office' });
 });
 
+/* ---------- Your phone number, for reset codes by text ----------------------------- */
+
+router.post('/phone', requireAuth, authLimiter, async (req, res) => {
+  res.json(await phone.startVerification(req.user, req.body?.phone, { ip: req.ip }));
+});
+router.post('/phone/verify', requireAuth, authLimiter, async (req, res) => {
+  res.json(await phone.confirm(req.user, req.body?.code, { ip: req.ip }));
+});
+router.delete('/phone', requireAuth, async (req, res) => {
+  await phone.remove(req.user, { ip: req.ip });
+  res.json({ ok: true });
+});
+
 /** How "Forgot password" works on this site, so the page can explain the right steps. */
 router.get('/options', (req, res) => {
-  res.json({ resetByEmail: mail.enabled(), codeMinutes: passwordReset.CODE_MINUTES });
+  res.json({ resetByCode: codesOn(), channels: channels(), codeMinutes: passwordReset.CODE_MINUTES });
 });
 
 /** Second step: the emailed code and a new password. Signs the person in on success. */

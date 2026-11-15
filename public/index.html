@@ -88,7 +88,7 @@
 
       <!-- Step 2 of a reset by email: the code and a new password -->
       <form class="form" data-form="reset-code" novalidate hidden>
-        <h1 class="serif auth__title">Check your email</h1>
+        <h1 class="serif auth__title" data-code-title>Check your email</h1>
         <p class="auth__text" data-code-sent></p>
         <label class="field">
           <span class="field__label">6-digit code</span>
@@ -106,7 +106,8 @@
         </label>
         <p class="alert" data-error hidden></p>
         <button class="button button--primary" type="submit">Reset password and sign in</button>
-        <p class="auth__switch">No email? Check your spam folder, or <button class="link-button" type="button" data-resend>send a new code</button>.</p>
+        <p class="auth__switch">No code? If it was emailed, check your spam folder. You can also <button class="link-button" type="button" data-resend>send a new code</button>,
+          or contact the timetable office with your ID card.</p>
         <p class="auth__switch"><button class="link-button" type="button" data-switch="login">Back to sign in</button></p>
       </form>
 
@@ -191,6 +192,8 @@
       <h1 class="serif dash__greeting" data-greeting></h1>
       <p class="mono dash__date" data-today></p>
       <section class="access-banner" data-access-banner hidden aria-live="polite"></section>
+      <p class="phone-prompt" data-phone-prompt hidden>Add your phone number so you can reset your password by text message if you forget it.
+        <button class="link-button" type="button">Add phone number</button></p>
     </div>
 
     <section class="panel glass dash__next" aria-labelledby="next-title">

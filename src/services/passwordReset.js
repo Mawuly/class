@@ -1,5 +1,6 @@
 'use strict';
-// Password reset with a 6-digit code sent by email.
+// Password reset with a 6-digit code, sent by text message (Arkesel) to a verified phone number,
+// or by email to people without one. Without either, the timetable office is told instead.
 //
 //   Expiry        10 minutes, and only the newest code a person was sent works
 //   Wrong tries   5, then the code is used up
@@ -8,7 +9,6 @@
 //   Storage       an HMAC of the code, keyed with the server secret: a database copy alone
 //                 can't be used to try codes offline
 //   Privacy       the answer to "send me a code" is the same whether or not the email exists
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const config = require('../config');
 const db = require('../db');
@@ -17,19 +17,16 @@ const { passwordProblem } = require('../utils/validate');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const mail = require('./mail');
+const sms = require('./sms');
+const otp = require('../utils/otp');
 
 const CODE_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const MIN_GAP_SECONDS = 60;
 const MAX_PER_HOUR = 5;
 
-const keyed = (code) => crypto.createHmac('sha256', config.jwtSecret).update(`password-reset:${code}`).digest('hex');
-const sameHash = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-
-/** 6 random digits, shown as "482 913" so it's easy to read and type. */
-function newCode() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-}
+const keyed = (code) => otp.keyed('password-reset', code);
+const { sameHash, newCode } = otp;
 
 function message(name, code) {
   const spaced = `${code.slice(0, 3)} ${code.slice(3)}`;
@@ -59,9 +56,42 @@ function message(name, code) {
  * Sends a code if the email belongs to an active account and the limits allow it.
  * Always resolves the same way, so the caller can't learn whether the account exists.
  */
+/**
+ * Without a way to send a code, the timetable office is told and resets it in person.
+ * At most one note an hour per person.
+ */
+async function notifyOffice(user, ip) {
+  const recent = await db.get(
+    `SELECT 1 AS yes FROM audit_log WHERE user_id = ? AND action = 'auth.reset_requested'
+       AND created_at > now() - interval '1 hour'`,
+    [user.id],
+  );
+  if (recent) return;
+  await db.tx(async (x) => {
+    const admins = await x.all("SELECT id FROM users WHERE role = 'admin' AND is_active AND id <> ?", [user.id]);
+    for (const a of admins) {
+      await notify(a.id, `${user.name} (${user.email}) has forgotten their password. Check their ID, then reset it under People.`, x);
+    }
+    await audit({ userId: user.id, action: 'auth.reset_requested', entity: 'user', entityId: user.id, ip }, x);
+  });
+}
+
+/** Which way this person's code goes: a text to a verified phone, else email, else nothing. */
+function channelFor(user) {
+  if (sms.enabled() && user.phone && user.phone_verified_at) return 'sms';
+  if (mail.enabled()) return 'email';
+  return null;
+}
+
+/**
+ * Sends a code if the email belongs to an active account and the limits allow it.
+ * Always resolves the same way, so the caller can't learn whether the account exists.
+ */
 async function requestCode(email, { ip } = {}) {
-  const user = await db.get('SELECT id, name, email FROM users WHERE lower(email) = ? AND is_active', [email]);
+  const user = await db.get('SELECT id, name, email, phone, phone_verified_at FROM users WHERE lower(email) = ? AND is_active', [email]);
   if (!user) return;
+  const channel = channelFor(user);
+  if (!channel) { await notifyOffice(user, ip); return; }
   const { recent, lastHour } = await db.get(
     `SELECT count(*) FILTER (WHERE created_at > now() - make_interval(secs => ?))::int AS recent,
             count(*) FILTER (WHERE created_at > now() - interval '1 hour')::int AS "lastHour"
@@ -77,23 +107,28 @@ async function requestCode(email, { ip } = {}) {
     // Only the newest code works.
     await x.run('UPDATE password_resets SET used_at = now() WHERE user_id = ? AND used_at IS NULL', [user.id]);
     await x.run(
-      `INSERT INTO password_resets (user_id, code_hash, expires_at, ip)
-       VALUES (?, ?, now() + make_interval(mins => ?), ?)`,
-      [user.id, keyed(code), CODE_MINUTES, ip],
+      `INSERT INTO password_resets (user_id, code_hash, expires_at, ip, channel)
+       VALUES (?, ?, now() + make_interval(mins => ?), ?, ?)`,
+      [user.id, keyed(code), CODE_MINUTES, ip, channel],
     );
-    await audit({ userId: user.id, action: 'auth.reset_code_sent', entity: 'user', entityId: user.id, ip }, x);
+    await audit({ userId: user.id, action: 'auth.reset_code_sent', entity: 'user', entityId: user.id, details: { channel }, ip }, x);
   });
   try {
-    await mail.send({ to: user.email, ...message(user.name, code) });
+    if (channel === 'sms') {
+      // Plain characters and under 160, so it arrives as one SMS.
+      await sms.send(user.phone, `Lecture Rooms: your password reset code is ${otp.spaced(code)}. Valid ${CODE_MINUTES} min. Never share it.`);
+    } else {
+      await mail.send({ to: user.email, ...message(user.name, code) });
+    }
   } catch (err) {
     // Don't reveal the failure to the requester (that would confirm the account exists); log it.
-    console.error('[mail] could not send a reset code:', err.message);
+    console.error(`[${channel}] could not send a reset code:`, err.message);
     await audit({ userId: user.id, action: 'auth.reset_code_failed', entity: 'user', entityId: user.id,
-      details: { error: String(err.message).slice(0, 200) }, ip });
+      details: { channel, error: String(err.message).slice(0, 200) }, ip });
   }
 }
 
-const WRONG = 'That code is wrong or has expired. Check the latest email, or ask for a new code.';
+const WRONG = 'That code is wrong or has expired. Check the latest message, or ask for a new code.';
 
 /** Checks the code and sets the new password. Returns the user, ready to be signed in. */
 async function resetWithCode(email, code, newPassword, { ip } = {}) {
@@ -120,7 +155,8 @@ async function resetWithCode(email, code, newPassword, { ip } = {}) {
     const user = await x.get(
       `UPDATE users SET password_hash = ?, must_change_password = false, temp_password_expires_at = NULL,
               session_version = session_version + 1, password_changed_at = now()
-       WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version`,
+       WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version,
+                 phone, phone_verified_at`,
       [await bcrypt.hash(newPassword, config.bcryptCost), row.user_id],
     );
     await x.run('UPDATE password_resets SET used_at = now() WHERE user_id = ? AND used_at IS NULL', [row.user_id]);
@@ -133,4 +169,4 @@ async function resetWithCode(email, code, newPassword, { ip } = {}) {
   });
 }
 
-module.exports = { requestCode, resetWithCode, newCode, message, CODE_MINUTES, MAX_ATTEMPTS };
+module.exports = { requestCode, resetWithCode, notifyOffice, newCode, message, CODE_MINUTES, MAX_ATTEMPTS };

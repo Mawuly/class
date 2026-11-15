@@ -39,7 +39,8 @@ async function authenticate(req, res, next) {
     return next();
   }
   const user = await db.get(
-    `SELECT id, name, email, role, department, index_number, is_active, must_change_password, session_version
+    `SELECT id, name, email, role, department, index_number, is_active, must_change_password, session_version,
+            phone, phone_verified_at
      FROM users WHERE id = ?`,
     [payload.sub],
   );

@@ -13,7 +13,7 @@ async function audit({ userId = null, action, entity = null, entityId = null, de
 
 // Filter groups shown on the audit page.
 const GROUPS = {
-  security: ['auth.%', 'calendar.%', 'user.reset_password', 'user.role_change', 'user.deactivate', 'user.reactivate', 'user.promote_admin', 'access.%'],
+  security: ['auth.%', 'calendar.%', 'phone.%', 'user.reset_password', 'user.role_change', 'user.deactivate', 'user.reactivate', 'user.promote_admin', 'access.%'],
   failed: ['auth.login_failed'],
   bookings: ['booking.%', 'series.%'],
   rooms: ['room.%', 'building.%'],
@@ -43,11 +43,14 @@ function describe(e) {
     'auth.register': ['created an account'],
     'auth.change_password': ['changed their password', d.after ? 'after a reset' : ''],
     'auth.reset_requested': ['said they forgot their password'],
-    'auth.reset_code_sent': ['was emailed a password reset code'],
+    'auth.reset_code_sent': [d.channel === 'sms' ? 'was texted a password reset code' : 'was emailed a password reset code'],
+    'phone.code_sent': ['asked for a code to confirm a phone number'],
+    'phone.verified': ['confirmed their phone number'],
+    'phone.removed': ['removed their phone number'],
     'auth.reset_code_throttled': ['asked for another reset code too soon', 'no code sent'],
     'auth.reset_code_failed': ['could not be emailed a reset code', d.error || ''],
     'auth.reset_code_wrong': ['entered a wrong reset code', d.attempt ? `attempt ${d.attempt} of 5` : ''],
-    'auth.reset_with_code': ['reset their password with an emailed code'],
+    'auth.reset_with_code': ['reset their password with a code'],
     'user.reset_password': [`reset ${person}'s password`],
     'user.role_change': [`made ${person} ${ROLE[d.role] === 'admin' ? 'an' : 'a'} ${ROLE[d.role] || d.role}`, d.from ? `was ${d.from}` : ''],
     'user.update': [`updated ${person}'s details`],

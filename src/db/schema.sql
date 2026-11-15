@@ -180,6 +180,24 @@ CREATE TABLE IF NOT EXISTS password_resets (
 );
 CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets (user_id, created_at);
 
+-- Phone numbers for reset codes by text message (schema version 7). A number only receives reset
+-- codes once its owner has typed in a code sent to it, so a mistyped number can't receive them.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone             text;      -- 233XXXXXXXXX
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at timestamptz;
+ALTER TABLE password_resets ADD COLUMN IF NOT EXISTS channel text;      -- 'sms' or 'email'
+CREATE TABLE IF NOT EXISTS phone_verifications (
+  id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    integer     NOT NULL REFERENCES users(id),
+  phone      text        NOT NULL,
+  code_hash  text        NOT NULL,
+  expires_at timestamptz NOT NULL,
+  attempts   integer     NOT NULL DEFAULT 0,
+  used_at    timestamptz,
+  ip         text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications (user_id, created_at);
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,
@@ -199,3 +217,4 @@ ALTER TABLE audit_log      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_meta       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE phone_verifications ENABLE ROW LEVEL SECURITY;

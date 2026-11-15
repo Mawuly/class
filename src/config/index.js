@@ -86,6 +86,15 @@ module.exports = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.MAIL_FROM || process.env.SMTP_USER || '',
   },
+  // Text messages through Arkesel (arkesel.com), for password reset codes. The sender ID must be
+  // registered and approved in your Arkesel account (at most 11 characters).
+  sms: {
+    apiKey: process.env.ARKESEL_API_KEY || '',
+    sender: process.env.ARKESEL_SENDER_ID || '',
+    url: process.env.ARKESEL_URL || 'https://sms.arkesel.com/api/v2/sms/send',
+    // "true" asks Arkesel to accept messages without sending or charging: for testing the set-up.
+    sandbox: /^(1|true|yes)$/i.test(process.env.ARKESEL_SANDBOX || ''),
+  },
   // e.g. "ug.edu.gh" — leave empty to allow any email address
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,
