@@ -105,6 +105,7 @@ Optional settings (Vercel → Settings → Environment Variables):
 | Name | What it does |
 |---|---|
 | `SEED_DEMO` | `true` adds demo lecturers, a demo student (`student@campus.test` / `Campus2026`) and sample bookings to an empty database. No demo admin is ever created on a deployment. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Turn on **Continue with Google** (see below). Without them the button is hidden. |
 | `CAMPUS` | `ucc` (default): the University of Cape Coast's lecture buildings and rooms. `demo`: a small made-up campus. |
 | `CHECKIN_GRACE_MINUTES` | Minutes after the start a booking can be checked in to before it is released (5–60, default 15). |
 | `CHECKIN_RELEASE` | `off` keeps check-in but never releases bookings (useful while signs are being put up). |
@@ -222,3 +223,20 @@ src/utils/            Time-slot validation and overlap logic
 public/               Frontend (HTML, CSS, JS, fonts, campus footage)
 tests/                Unit tests and API tests (node:test + supertest)
 ```
+
+
+## Continue with Google
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → create (or choose) a project.
+2. **APIs & Services → OAuth consent screen**: user type *External* (or *Internal* if your
+   university uses Google Workspace and only its accounts should sign in), app name, support email.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**.
+   Under **Authorised redirect URIs** add `https://<your-site>.vercel.app/api/auth/google/callback`
+   (and the same for any custom domain).
+4. In Vercel → Settings → Environment Variables add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then redeploy.
+
+New Google users become students (admins if listed in `ADMIN_EMAILS`); lecturers then request lecturer
+access with their letter as before. If someone signs in with Google using the email of an existing
+account, the accounts are linked, and the old password stops working (sign-up never proved who owned
+that email; Google has). They keep using Google, or set a new password with "Forgot password".
+With `ALLOWED_EMAIL_DOMAIN` set, only Google accounts at that domain can sign in.

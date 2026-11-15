@@ -98,6 +98,14 @@ module.exports = {
   // Which campus's buildings and rooms to load: "ucc" (University of Cape Coast) or "demo"
   // (a small made-up campus, used by the tests). See db/campus.js.
   campus: (process.env.CAMPUS || (isTest ? 'demo' : 'ucc')).toLowerCase(),
+  // "Continue with Google" (Google Cloud → APIs & Services → Credentials → OAuth client ID, type
+  // "Web application"). Both are needed; without them the Google button is hidden.
+  // GOOGLE_REDIRECT_URI only for a custom setup; normally it is <site>/api/auth/google/callback.
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || '',
+  },
   // e.g. "ug.edu.gh" — leave empty to allow any email address
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,

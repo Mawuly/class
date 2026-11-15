@@ -37,10 +37,11 @@ function describe(e) {
   const d = e.details || {};
   const owner = e.target_owner_name && e.target_owner_name !== e.actor_name ? `${e.target_owner_name}'s ` : '';
   const S = {
-    'auth.login': ['signed in'],
+    'auth.login': ['signed in', d.via === 'google' ? 'with Google' : ''],
     'auth.login_failed': [d.reason === 'temporary password expired' ? 'tried an expired temporary password' : 'failed to sign in',
       d.email ? `as ${d.email}` : ''],
-    'auth.register': ['created an account'],
+    'auth.register': ['created an account', d.via === 'google' ? 'with Google' : ''],
+    'auth.google_linked': ['linked their Google account', 'old password no longer works'],
     'auth.change_password': ['changed their password', d.after ? 'after a reset' : ''],
     'auth.reset_requested': ['said they forgot their password'],
     'auth.reset_code_sent': [d.channel === 'sms' ? 'was texted a password reset code' : 'was emailed a password reset code'],

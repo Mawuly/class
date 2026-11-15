@@ -1,0 +1,16 @@
+/* "Continue with Google": Google's sign-in button look (white, grey outline, the G mark). */
+.google-button {
+  display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;
+  min-height: 44px; padding: 10px 16px; border: 1px solid #747775; border-radius: 8px;
+  background: #fff; color: #1f1f1f; font: 500 14px/1.2 inherit; text-decoration: none; cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+.google-button:hover { background: #f8fafd; box-shadow: 0 1px 3px rgb(60 64 67 / 0.25); }
+.google-button:focus-visible { outline: 3px solid #d39423; outline-offset: 2px; }
+.google-button svg { width: 18px; height: 18px; flex: none; }
+.google-or {
+  display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; font-size: 11px;
+  color: #6c7b8f; text-transform: uppercase; letter-spacing: .08em;
+}
+.google-or::before, .google-or::after { content: ''; flex: 1; border-top: 1px solid #e2e8f0; }
+.google-signin { margin: 16px 0 6px; }

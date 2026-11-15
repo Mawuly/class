@@ -362,6 +362,10 @@ CREATE TRIGGER room_blocks_reject_bookings BEFORE INSERT OR UPDATE ON room_block
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS supervisor     text;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_out_at timestamptz;
 
+-- Sign-in with Google (schema version 13): the Google account's permanent ID ("sub").
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub text;
+CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_key ON users (google_sub) WHERE google_sub IS NOT NULL;
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

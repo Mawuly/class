@@ -14,6 +14,8 @@ const phone = require('../services/phone');
 const { displayPhone } = require('../utils/phone');
 const passwordReset = require('../services/passwordReset');
 const { setSession, clearSession, requireAuth } = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
+const google = require('../services/google');
 
 const router = express.Router();
 
@@ -175,7 +177,7 @@ router.delete('/phone', requireAuth, async (req, res) => {
 
 /** How "Forgot password" works on this site, so the page can explain the right steps. */
 router.get('/options', (req, res) => {
-  res.json({ resetByCode: codesOn(), channels: channels(), codeMinutes: passwordReset.CODE_MINUTES });
+  res.json({ resetByCode: codesOn(), channels: channels(), codeMinutes: passwordReset.CODE_MINUTES, google: google.configured() });
 });
 
 /** Second step: the emailed code and a new password. Signs the person in on success. */
@@ -184,6 +186,56 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   const user = await passwordReset.resetWithCode(email, req.body?.code, req.body?.newPassword, { ip: req.ip });
   setSession(res, user);
   res.json({ user: publicUser(user) });
+});
+
+/* ---------- Continue with Google ---------------------------------------------------- */
+
+// Where people may be sent back to after Google: our own pages only, never another site.
+const NEXT_RE = /^\/(admin|account\.html|booking\.html|door\?c=[A-Za-z0-9-]{6,7})?(#[\w/-]*)?$/;
+const safeNext = (v) => (typeof v === 'string' && NEXT_RE.test(v) ? v : '/');
+const GOOGLE_COOKIE = 'g_oauth';
+const googleCookie = { httpOnly: true, sameSite: 'lax', secure: config.isProd, path: '/api/auth/google' };
+const redirectUri = (req) => config.google.redirectUri || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+
+/** Back to the page they came from, with a message the page shows. */
+function backWithError(res, next, message) {
+  const [path, hash = ''] = next.split('#');
+  res.redirect(303, `${path}${path.includes('?') ? '&' : '?'}auth_error=${encodeURIComponent(message)}${hash ? `#${hash}` : ''}`);
+}
+
+// Step 1: the "Continue with Google" link. Remembers (in a short-lived signed cookie) what is
+// needed to check Google's answer, then sends the person to Google.
+router.get('/google/start', authLimiter, (req, res) => {
+  const next = safeNext(req.query.next);
+  if (!google.configured()) return backWithError(res, next, 'Google sign-in is not set up yet. Use your email and password.');
+  const { url, state, nonce, verifier } = google.start(redirectUri(req));
+  res.cookie(GOOGLE_COOKIE, jwt.sign({ state, nonce, verifier, next }, config.jwtSecret, { expiresIn: '10m' }),
+    { ...googleCookie, maxAge: 10 * 60 * 1000 });
+  res.redirect(302, url);
+});
+
+// Step 2: Google sends the person back here with a one-time code.
+router.get('/google/callback', authLimiter, async (req, res) => {
+  let saved = null;
+  try { saved = jwt.verify(req.cookies?.[GOOGLE_COOKIE] || '', config.jwtSecret); } catch { /* missing or expired */ }
+  res.clearCookie(GOOGLE_COOKIE, googleCookie);
+  const next = safeNext(saved?.next);
+  if (!saved) return backWithError(res, next, 'Google sign-in took too long or was started in another browser. Please try again.');
+  if (req.query.error) return backWithError(res, next, 'Google sign-in was cancelled.');
+  const state = String(req.query.state || '');
+  if (state.length !== saved.state.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(saved.state))) {
+    return backWithError(res, next, 'Google sign-in could not be verified. Please try again.');
+  }
+  try {
+    const identity = await google.identify({ code: String(req.query.code || ''), verifier: saved.verifier, nonce: saved.nonce, redirectUri: redirectUri(req) });
+    const { user } = await google.signIn(identity, { ip: req.ip });
+    setSession(res, user);
+    res.redirect(303, next);
+  } catch (err) {
+    if (!(err instanceof AppError)) throw err;
+    await audit({ action: 'auth.login_failed', details: { via: 'google', reason: err.message.slice(0, 120) }, ip: req.ip });
+    backWithError(res, next, err.message);
+  }
 });
 
 module.exports = router;
