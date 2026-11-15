@@ -5,6 +5,7 @@ const roomAdmin = require('../services/roomAdmin');
 const userAdmin = require('../services/userAdmin');
 const access = require('../services/access');
 const stats = require('../services/stats');
+const auditLog = require('../services/audit');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
@@ -110,6 +111,20 @@ router.post('/access-requests/:id/reject', async (req, res) => {
 
 router.get('/stats', async (req, res) => res.json(await stats.overview(req.query)));
 
-// The audit log comes next.
+/* ---------- Audit log ------------------------------------------------------------------ */
+
+router.get('/audit', async (req, res) => {
+  const [page, security] = await Promise.all([auditLog.list(req.query), auditLog.securitySummary()]);
+  res.json({ ...page, security });
+});
+
+// A plain link downloads it: GET needs no CSRF header, and the admin cookie still applies.
+router.get('/audit.csv', async (req, res) => {
+  res.set({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': `attachment; filename="audit-log_${new Date().toISOString().slice(0, 10)}.csv"`,
+  });
+  res.send(await auditLog.csv(req.query));
+});
 
 module.exports = router;

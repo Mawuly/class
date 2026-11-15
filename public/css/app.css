@@ -929,6 +929,42 @@ kbd {
 .row__cancels { display: flex; gap: 10px; white-space: nowrap; }
 .row__weekly { display: block; color: var(--text-strong); }
 
+/* ---------- Audit log ---------------------------------------------------------------- */
+
+.security { margin-bottom: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-input); background: var(--ink); font-size: 13px; color: var(--text); }
+.security p { display: inline; }
+.security .link-button { margin-left: 4px; }
+/* Many failed sign-ins: the one solid light thing on the page. */
+.security--warn { background: var(--bone); color: var(--ink); border-color: var(--bone); outline: 2px solid var(--bone); outline-offset: 2px; }
+.security--warn p::before { content: '⚠ '; font-family: var(--mono); }
+.security--warn .link-button { color: var(--ink); text-decoration-color: var(--ink); font-weight: 500; }
+.filters__csv { margin-left: auto; font-size: 13px; }
+.audit-view input[type="search"] { width: 240px; }
+
+.audit { display: grid; gap: 18px; transition: opacity .2s; }
+.audit.is-loading { opacity: .5; }
+.audit-day { border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--ink); overflow: hidden; }
+.audit-day__head {
+  display: flex; justify-content: space-between; gap: 12px; margin: 0; padding: 12px 18px;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-strong);
+  background: rgb(var(--bone-rgb) / 0.03); border-bottom: 1px solid var(--line);
+}
+.audit-day__head span { color: var(--text-muted); }
+.entries { list-style: none; margin: 0; padding: 0; }
+.entry {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(160px, auto); gap: 4px 16px; align-items: baseline;
+  padding: 10px 18px; border-top: 1px solid var(--line); font-size: 13px;
+}
+.entry:first-child { border-top: 0; }
+.entry__time { color: var(--text-muted); font-size: 12px; }
+.entry__summary { color: var(--text-strong); }
+.entry__detail { margin-top: 2px; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.entry__meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; font-size: 10px; color: var(--text-muted); }
+/* Kinds without colour: a failed sign-in is the one entry marked, with ⚠ and a Bone edge. */
+.entry--failed { box-shadow: inset 3px 0 0 var(--bone); }
+.entry--failed .entry__summary { font-weight: 500; }
+.audit-more { display: flex; justify-content: center; margin-top: 16px; }
+
 /* ---------- Statistics -------------------------------------------------------------- */
 
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
@@ -1097,7 +1133,12 @@ kbd {
   .page-bar__actions .button { flex: 1; }
   .rt-row, .rt-group__head { padding-left: 14px; padding-right: 14px; }
   .filters select, .filters__custom { flex: 1 1 100%; }
-  .filters__custom input { flex: 1; width: auto; min-width: 0; }
+  .audit-view input[type="search"] { flex: 1 1 100%; width: auto; }
+  .filters__csv { margin-left: 0; }
+  .entry { grid-template-columns: 48px minmax(0, 1fr); padding: 10px 14px; }
+  .entry__meta { grid-column: 2; justify-content: flex-start; }
+  .filters__custom { min-width: 0; }
+  .filters__custom input { flex: 1 1 0; width: 100%; min-width: 0; }
   .kpi:nth-child(2n+1):not(.kpi--hero) { border-left: 0; }
   .kpis { grid-template-columns: 1fr; }
   .meters__row { grid-template-columns: 64px minmax(0, 1fr) 48px; grid-template-areas: "code name fig" "meter meter meter" "sub sub sub"; gap: 4px 10px; }

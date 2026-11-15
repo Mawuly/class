@@ -119,6 +119,20 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action, created_at);
+
+-- The audit log is append-only (schema version 4): any attempt to change or remove an entry is
+-- refused by the database itself, whichever program asks. The app never updates or deletes it.
+CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  RAISE EXCEPTION 'The audit log cannot be changed or deleted (entry %)', OLD.id
+    USING ERRCODE = 'insufficient_privilege';
+END;
+$fn$;
+DROP TRIGGER IF EXISTS audit_log_no_changes ON audit_log;
+CREATE TRIGGER audit_log_no_changes BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
 
 -- Requests for lecturer or admin access, made at sign-up with an offer or appointment letter.
 -- The letter itself is deleted when an admin decides; its SHA-256 fingerprint is kept as a record

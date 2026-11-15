@@ -1031,3 +1031,78 @@ describe('weekly bookings', () => {
     assert.equal((await lecturer.post(`/api/bookings/series/${created.body.seriesId}/cancel`)).status, 400);
   });
 });
+
+describe('audit log', () => {
+  let admin; let lecturer; let student;
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('auditor@campus.test', 'admin');
+    lecturer = await signedIn('logged.lect@campus.test', 'lecturer');
+    student = await signedIn('logged.student@campus.test');
+  });
+
+  test('only admins can read it', async () => {
+    assert.equal((await lecturer.get('/api/admin/audit')).status, 403);
+    assert.equal((await student.get('/api/admin/audit.csv')).status, 403);
+  });
+
+  test('entries read as sentences, newest first', async () => {
+    const date = tomorrow();
+    const req = await student.post('/api/bookings').send({ roomId: await roomId('LIB-S1'), title: 'Revision', category: 'study', date, start: '10:00', end: '11:00', attendees: 3 });
+    await admin.post(`/api/admin/bookings/${req.body.booking.id}/reject`).send({ reason: 'Exams' });
+    await agent().post('/api/auth/login').send({ email: 'logged.student@campus.test', password: 'wrong-pass1' });
+    const { body } = await admin.get('/api/admin/audit');
+    const s = body.entries.map((e) => e.summary);
+    assert.equal(s[0], "Failed sign-in to logged.student's account");
+    assert.match(s[1], /^auditor rejected logged\.student's request for LIB-S1 on .+ at 10:00$/);
+    assert.equal(body.entries[1].detail, '“Exams”');
+    assert.match(s[2], /^logged\.student booked LIB-S1 on .+ at 10:00$/);
+    assert.equal(body.entries[2].detail, 'request, awaiting approval');
+    assert.ok(s.includes('auditor created an account'));
+  });
+
+  test('filters: security, a person, dates; and "load older"', async () => {
+    await lecturer.post('/api/bookings').send({ roomId: await roomId('LT-2'), title: 'X', category: 'lecture', date: tomorrow(), start: '08:00', end: '09:00', attendees: 10 });
+    await agent().post('/api/auth/login').send({ email: 'nobody@campus.test', password: 'wrong-pass1' });
+    const security = (await admin.get('/api/admin/audit?group=security')).body.entries;
+    assert.ok(security.every((e) => e.action.startsWith('auth.') || e.action.startsWith('user.') || e.action.startsWith('access.')));
+    const failed = await admin.get('/api/admin/audit?group=failed');
+    assert.deepEqual(failed.body.entries.map((e) => e.action), ['auth.login_failed']);
+    assert.equal(failed.body.security.failed_24h, 1);
+    const bookings = (await admin.get('/api/admin/audit?group=bookings&q=LOGGED.LECT')).body.entries;
+    assert.equal(bookings.length, 1);
+    assert.equal(bookings[0].action, 'booking.create');
+    const byEmail = (await admin.get('/api/admin/audit?q=nobody@campus')).body.entries;
+    assert.equal(byEmail.length, 1);
+    assert.equal(byEmail[0].summary, 'Failed sign-in for an unknown email');
+    assert.equal(byEmail[0].detail, 'tried nobody@campus.test');
+    const today = localDate();
+    assert.ok((await admin.get(`/api/admin/audit?from=${today}&to=${today}`)).body.entries.length > 0);
+    assert.equal((await admin.get(`/api/admin/audit?to=${addDays(today, -1)}`)).body.entries.length, 0);
+    // Paging
+    const all = (await admin.get('/api/admin/audit')).body.entries;
+    const { body } = await request(app).get('/api/admin/audit').set('Cookie', '').set('X-Requested-With', 'XMLHttpRequest');
+    assert.equal(body.error, 'Please sign in');
+    const older = (await admin.get(`/api/admin/audit?before=${all[1].id}`)).body.entries;
+    assert.equal(older[0].id, all[2].id);
+    assert.equal((await admin.get('/api/admin/audit?group=nonsense')).status, 400);
+  });
+
+  test('the log cannot be changed or deleted, even directly in the database', async () => {
+    const row = await db.get('SELECT id FROM audit_log ORDER BY id LIMIT 1');
+    await assert.rejects(db.run("UPDATE audit_log SET action = 'edited' WHERE id = ?", [row.id]), /cannot be changed or deleted/);
+    await assert.rejects(db.run('DELETE FROM audit_log WHERE id = ?', [row.id]), /cannot be changed or deleted/);
+    assert.ok(await db.get('SELECT id FROM audit_log WHERE id = ?', [row.id]));
+  });
+
+  test('CSV export matches the page', async () => {
+    await student.post('/api/auth/change-password').send({ currentPassword: PASSWORD, newPassword: 'NewPass123' });
+    const res = await admin.get('/api/admin/audit.csv?group=security');
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'], /text\/csv/);
+    assert.match(res.headers['content-disposition'], /attachment; filename="audit-log_/);
+    const lines = res.text.replace(/^﻿/, '').split('\r\n');
+    assert.match(lines[0], /^"Time \(Accra\)","Who","Email"/);
+    assert.match(lines[1], /"logged\.student changed their password"/);
+  });
+});

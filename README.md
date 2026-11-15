@@ -64,6 +64,12 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   skip the weeks that clash; everything is booked in one transaction. Cancel one week, or every
   remaining week of the series, from Coming up
 
+- Audit log for admins (Audit log in the top bar): every sign-in, booking and admin action as a plain
+  sentence, grouped by day, with the action code and IP address; filters for security, failed
+  sign-ins, bookings, rooms and people, a person's name or email, and dates; a warning when there
+  have been many failed sign-ins in 24 hours; CSV export. The database refuses any change to or
+  deletion of a log entry
+
 Next: recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally

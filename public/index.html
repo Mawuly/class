@@ -32,6 +32,7 @@
       <a class="topbar__link" href="#/rooms" data-nav="rooms" data-admin-only hidden>Rooms</a>
       <a class="topbar__link" href="#/people" data-nav="people" data-admin-only hidden>People</a>
       <a class="topbar__link" href="#/stats" data-nav="stats" data-admin-only hidden>Statistics</a>
+      <a class="topbar__link" href="#/audit" data-nav="audit" data-admin-only hidden>Audit log</a>
       <button class="link-button topbar__who" type="button" data-user-name data-account aria-label="Your account and password"></button>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -356,6 +357,37 @@
     <p class="alert" data-error hidden></p>
     <div class="stats" data-stats></div>
     <div class="chart-tip" data-chart-tip role="tooltip" hidden></div>
+  </main>
+
+  <!-- Audit log (admins) --------------------------------------------------------------- -->
+  <main class="rooms-view audit-view" data-view="audit" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Audit log</h1>
+        <p class="mono page-bar__summary">Every sign-in, booking and admin action. Entries can’t be changed or deleted, not even by admins.</p>
+      </div>
+    </div>
+    <section class="security" data-security aria-live="polite"></section>
+    <div class="filters" role="group" aria-label="Filters">
+      <select data-audit-group aria-label="What to show">
+        <option value="all">Everything</option>
+        <option value="security">Security</option>
+        <option value="failed">Failed sign-ins</option>
+        <option value="bookings">Bookings</option>
+        <option value="rooms">Rooms and buildings</option>
+        <option value="people">People and access</option>
+      </select>
+      <input type="search" data-audit-q placeholder="Person’s name or email" aria-label="Person’s name or email">
+      <span class="filters__custom">
+        <input type="date" class="mono" data-audit-from aria-label="From">
+        <span aria-hidden="true">–</span>
+        <input type="date" class="mono" data-audit-to aria-label="To">
+      </span>
+      <a class="link-button filters__csv" data-audit-csv href="#" download>Download CSV</a>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="audit" data-audit></div>
+    <div class="audit-more"><button class="button button--secondary" type="button" data-audit-more hidden>Load older entries</button></div>
   </main>
 
   <!-- Room / building editor: same sliding glass sheet as booking -------------------- -->

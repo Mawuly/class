@@ -5,6 +5,7 @@ import { showApprovals, pendingCount } from './approvals.js';
 import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
 import { showStats } from './stats.js';
+import { showAudit } from './audit.js';
 import { showWeek, hideWeek, weekHref } from './week.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
@@ -457,9 +458,9 @@ async function enterApp(user) {
   await route();
 }
 
-const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people', '#/stats': 'stats' };
-const APP_VIEWS = ['dashboard', 'board', 'week', 'approvals', 'rooms', 'people', 'stats'];
-const ADMIN_PAGES = ['approvals', 'rooms', 'people', 'stats'];
+const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people', '#/stats': 'stats', '#/audit': 'audit' };
+const APP_VIEWS = ['dashboard', 'board', 'week', 'approvals', 'rooms', 'people', 'stats', 'audit'];
+const ADMIN_PAGES = ['approvals', 'rooms', 'people', 'stats', 'audit'];
 
 /** Signed-in pages: "#/" dashboard, "#/board" day board; admins also approvals, rooms and people. */
 async function route() {
@@ -481,6 +482,7 @@ async function route() {
   // After a room edit, refresh the cached building and facility lists used by the board and search.
   if (page === 'people') showPeople({ me: state.user });
   if (page === 'stats') showStats({ buildings: state.meta.buildings });
+  if (page === 'audit') showAudit();
   if (page === 'rooms') showRooms({ onChange: async () => { state.meta = await api('/rooms/meta'); } });
   if (page === 'dashboard') await loadDashboard();
 }
