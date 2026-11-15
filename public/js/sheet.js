@@ -82,7 +82,8 @@ function renderPlan(plan) {
 
 function showSeriesDone(r) {
   const done = $('[data-done]', dialog);
-  done.replaceChildren(
+  // replaceChildren would print "null" for an empty slot, so leave empty slots out.
+  done.replaceChildren(...[
     h('p', { class: 'done__state' }, `■ Booked ${r.booked.length} weeks`),
     h('p', { class: 'done__text' }, `${r.room} is yours every ${dayName(r.booked[0])}, ${r.start}–${r.end}, `
       + `from ${longDate(r.booked[0])} to ${longDate(r.booked[r.booked.length - 1])}.`),
@@ -91,8 +92,10 @@ function showSeriesDone(r) {
       : null,
     h('p', { class: 'done__text muted' }, 'You can cancel single weeks, or the whole series, from Coming up on your dashboard.'),
     h('div', { class: 'sheet__actions' },
-      h('button', { class: 'button button--primary', type: 'button', onclick: close }, 'Done')),
-  );
+      h('button', { class: 'button button--primary', type: 'button', onclick: close }, 'Done'),
+      // The series' weeks are all upcoming bookings, so the "all my bookings" file includes them.
+      h('a', { class: 'button button--secondary', href: '/api/bookings/mine.ics', download: '' }, 'Add to calendar')),
+  ].filter(Boolean));
   form.hidden = true;
   done.hidden = false;
   $('[data-sheet-title]', dialog).textContent = 'Weekly booking confirmed';
@@ -202,7 +205,8 @@ function showDone(booking) {
       ? `The timetable office will review your request for ${booking.room_code}. The slot is held for you until they decide, and you'll get a notification either way.`
       : `${booking.room_code} is yours on ${longDate(booking.date)}, ${booking.start_time}–${booking.end_time}.`),
     h('div', { class: 'sheet__actions' },
-      h('button', { class: 'button button--primary', type: 'button', onclick: close }, 'Done')),
+      h('button', { class: 'button button--primary', type: 'button', onclick: close }, 'Done'),
+      h('a', { class: 'button button--secondary', href: `/api/bookings/${booking.id}/calendar.ics`, download: '' }, 'Add to calendar')),
   );
   form.hidden = true;
   done.hidden = false;

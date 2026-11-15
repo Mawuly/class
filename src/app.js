@@ -62,6 +62,7 @@ api.use('/bookings', require('./routes/bookings'));
 api.use('/admin', require('./routes/admin'));
 api.use('/notifications', require('./routes/notifications'));
 api.use('/access-requests', require('./routes/access'));
+api.use('/calendar', require('./routes/calendar').router);
 api.use(notFound);
 app.use('/api', api);
 

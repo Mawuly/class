@@ -1106,3 +1106,86 @@ describe('audit log', () => {
     assert.match(lines[1], /"logged\.student changed their password"/);
   });
 });
+
+describe('calendar export', () => {
+  let lecturer; let student; let admin;
+  const date = tomorrow();
+  beforeEach(async () => {
+    await resetDb();
+    lecturer = await signedIn('cal.lect@campus.test', 'lecturer');
+    student = await signedIn('cal.student@campus.test');
+    admin = await signedIn('cal.admin@campus.test', 'admin');
+  });
+  const text = (res) => (typeof res.text === 'string' ? res.text : Buffer.from(res.body).toString('utf8'));
+  const book = (who, code, extra = {}) => roomId(code).then((id) => who.post('/api/bookings').send({
+    roomId: id, title: 'Operating Systems', category: 'lecture', courseCode: 'CSC 301', date, start: '09:00', end: '11:00', attendees: 50, ...extra,
+  }));
+
+  test('download: upcoming approved and pending bookings, as an .ics attachment', async () => {
+    const mine = await book(lecturer, 'LT-1');
+    await book(lecturer, 'LT-2', { start: '13:00', end: '14:00', title: 'Gone' }).then((r) => lecturer.post(`/api/bookings/${r.body.booking.id}/cancel`));
+    const res = await lecturer.get('/api/bookings/mine.ics');
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'], /^text\/calendar/);
+    assert.match(res.headers['content-disposition'], /attachment; filename="my-room-bookings.ics"/);
+    const body = text(res);
+    assert.equal((body.match(/BEGIN:VEVENT/g) || []).length, 1); // the cancelled one is left out
+    assert.match(body, new RegExp(`UID:booking-${mine.body.booking.id}@lecture-rooms`));
+    assert.match(body, /SUMMARY:CSC 301 · Operating Systems \(LT-1\)/);
+    assert.match(body, /LOCATION:LT-1\\, Lecture Theatre 1\\, Lecture Theatre Block/);
+    assert.match(body, /STATUS:CONFIRMED/);
+  });
+
+  test('a student request shows as tentative, awaiting approval', async () => {
+    await book(student, 'LIB-S1', { category: 'study', attendees: 3, courseCode: '' });
+    const body = text(await student.get('/api/bookings/mine.ics'));
+    assert.match(body, /STATUS:TENTATIVE/);
+    assert.match(body, /SUMMARY:\[Awaiting approval\] Operating Systems \(LIB-S1\)/);
+  });
+
+  test("one booking's file: yours, or any for an admin, nobody else's", async () => {
+    const b = (await book(lecturer, 'LT-1')).body.booking;
+    const own = await lecturer.get(`/api/bookings/${b.id}/calendar.ics`);
+    assert.equal(own.status, 200);
+    assert.match(own.headers['content-disposition'], new RegExp(`LT-1_${date}\\.ics`));
+    assert.equal((await student.get(`/api/bookings/${b.id}/calendar.ics`)).status, 404);
+    assert.equal((await admin.get(`/api/bookings/${b.id}/calendar.ics`)).status, 200);
+  });
+
+  test('subscription: works without signing in, shows cancellations, and is stored only as a hash', async () => {
+    const b = (await book(lecturer, 'LT-1')).body.booking;
+    assert.deepEqual((await lecturer.get('/api/calendar/status')).body, { hasFeed: false, createdAt: null });
+    const link = (await lecturer.post('/api/calendar/feed')).body;
+    assert.match(link.url, /\/api\/calendar\/feed\/[A-Za-z0-9_-]{43}\.ics$/);
+    assert.match(link.webcal, /^webcal:/);
+    assert.match(link.google, /^https:\/\/calendar\.google\.com\/calendar\/r\?cid=webcal/);
+    const token = link.url.match(/feed\/([^.]+)\.ics/)[1];
+    const stored = await db.get('SELECT calendar_token_hash FROM users WHERE id = ?', [lecturer.user.id]);
+    assert.notEqual(stored.calendar_token_hash, token);
+    assert.equal(stored.calendar_token_hash.length, 64);
+
+    const path = new URL(link.url).pathname;
+    const feed = await request(app).get(path); // no cookie, no CSRF header: like a calendar app
+    assert.equal(feed.status, 200);
+    assert.match(feed.headers['content-type'], /^text\/calendar/);
+    assert.match(text(feed), /STATUS:CONFIRMED/);
+    await lecturer.post(`/api/bookings/${b.id}/cancel`);
+    assert.match(text(await request(app).get(path)), /STATUS:CANCELLED/); // so calendars remove it
+    assert.equal((await lecturer.get('/api/calendar/status')).body.hasFeed, true);
+  });
+
+  test('replacing or turning off the link stops the old one; bad tokens and deactivated accounts get 404', async () => {
+    const first = new URL((await lecturer.post('/api/calendar/feed')).body.url).pathname;
+    const second = new URL((await lecturer.post('/api/calendar/feed')).body.url).pathname;
+    assert.equal((await request(app).get(first)).status, 404);
+    assert.equal((await request(app).get(second)).status, 200);
+    await db.run('UPDATE users SET is_active = false WHERE id = ?', [lecturer.user.id]);
+    assert.equal((await request(app).get(second)).status, 404);
+    await db.run('UPDATE users SET is_active = true WHERE id = ?', [lecturer.user.id]);
+    await lecturer.delete('/api/calendar/feed');
+    assert.equal((await request(app).get(second)).status, 404);
+    assert.equal((await request(app).get('/api/calendar/feed/short.ics')).status, 404);
+    const actions = (await db.all("SELECT action FROM audit_log WHERE action LIKE 'calendar.%' ORDER BY id")).map((r) => r.action);
+    assert.deepEqual(actions, ['calendar.create_link', 'calendar.replace_link', 'calendar.remove_link']);
+  });
+});

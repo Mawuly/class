@@ -3,6 +3,8 @@ const express = require('express');
 const bookings = require('../services/bookings');
 const { requireAuth } = require('../middleware/auth');
 const { parseId } = require('../utils/validate');
+const calendar = require('../services/calendar');
+const { sendIcs, baseUrl } = require('./calendar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -21,6 +23,15 @@ router.post('/series', async (req, res) => {
 });
 router.post('/series/:id/cancel', async (req, res) => {
   res.json(await bookings.cancelSeries(req.user, parseId(req.params.id, 'Weekly booking'), { ip: req.ip }));
+});
+
+// Calendar files: all your upcoming bookings, or one booking.
+router.get('/mine.ics', async (req, res) => {
+  sendIcs(res, await calendar.download(req.user, baseUrl(req)), 'my-room-bookings.ics');
+});
+router.get('/:id/calendar.ics', async (req, res) => {
+  const one = await calendar.single(req.user, parseId(req.params.id, 'Booking'), baseUrl(req));
+  sendIcs(res, one.body, `${one.room}_${one.date}.ics`);
 });
 
 router.get('/mine', async (req, res) => {

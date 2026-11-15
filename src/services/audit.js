@@ -13,7 +13,7 @@ async function audit({ userId = null, action, entity = null, entityId = null, de
 
 // Filter groups shown on the audit page.
 const GROUPS = {
-  security: ['auth.%', 'user.reset_password', 'user.role_change', 'user.deactivate', 'user.reactivate', 'user.promote_admin', 'access.%'],
+  security: ['auth.%', 'calendar.%', 'user.reset_password', 'user.role_change', 'user.deactivate', 'user.reactivate', 'user.promote_admin', 'access.%'],
   failed: ['auth.login_failed'],
   bookings: ['booking.%', 'series.%'],
   rooms: ['room.%', 'building.%'],
@@ -64,6 +64,9 @@ function describe(e) {
     'building.create': [`added building ${e.target_building || d.code || ''}`.trim()],
     'building.update': [`edited building ${e.target_building || d.code || ''}`.trim()],
     'building.delete': [`deleted building ${d.code || ''}`.trim()],
+    'calendar.create_link': ['created a calendar subscription link'],
+    'calendar.replace_link': ['replaced their calendar subscription link', 'the old link stopped working'],
+    'calendar.remove_link': ['turned off their calendar subscription link'],
     'access.request': [`asked for ${d.role === 'admin' ? 'admin' : 'lecturer'} access`, 'letter attached'],
     'access.approve': [`gave ${e.target_access_name || 'someone'} ${d.role === 'admin' ? 'admin' : 'lecturer'} access`,
       d.letter_sha256 ? `letter ${d.letter_sha256.slice(0, 12)}…, deleted` : ''],

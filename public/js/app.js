@@ -6,6 +6,7 @@ import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
 import { showStats } from './stats.js';
 import { showAudit } from './audit.js';
+import { openCalendarSheet } from './calendar.js';
 import { showWeek, hideWeek, weekHref } from './week.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
@@ -657,6 +658,7 @@ function init() {
   $('[data-form="forgot"]').addEventListener('submit', (e) => { e.preventDefault(); submitForgot(e.target); });
   $('[data-form="new-password"]').addEventListener('submit', (e) => { e.preventDefault(); submitNewPassword(e.target); });
   $('[data-account]').addEventListener('click', openAccountSheet);
+  $('[data-calendar]').addEventListener('click', openCalendarSheet);
   // The server says a new password is needed (e.g. reset by an admin while this tab was open).
   window.addEventListener('must-change-password', () => {
     if (!state.user) return;

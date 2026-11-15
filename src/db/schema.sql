@@ -28,6 +28,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS temp_password_expires_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version          integer     NOT NULL DEFAULT 1;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at      timestamptz;
 
+-- Calendar subscription (schema version 5). Calendar apps fetch the feed without a login, so its
+-- address carries a secret token. Only the token's SHA-256 is stored, like a password.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_token_hash       text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_token_created_at timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS users_calendar_token_key ON users (calendar_token_hash) WHERE calendar_token_hash IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS buildings (
   id   integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   code text NOT NULL UNIQUE,

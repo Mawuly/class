@@ -3,74 +3,33 @@
 Find a free lecture room, book it without clashes, and let the timetable office approve student requests.
 Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Vercel.
 
-## What works so far
+## Features
 
-- Register, sign in and out (bcrypt + JWT in an `httpOnly` cookie), change password
-- Booking rules: 07:00–21:00, 30-minute slots, at most 6 hours, up to 150 days ahead, no past times, capacity check
-- Role rules: students may only book seminar, study and meeting rooms, for study, meeting or event purposes, and wait for approval; lecturers and admins are approved straight away
-- Clash detection that names the conflicting booking and suggests the nearest free slot of the same length
-- **Database-level double-booking protection:** two Postgres exclusion constraints stop overlapping pending or approved bookings, in one room or for one person, even if requests arrive at the same moment
-- Free-room finder (smallest suitable room first), day board and room week API
-- Admin approval API with approve and reject, in-app notifications, audit log
-- "Campus Now" landing page with live room counts and ticker, sign-in and register, and a first dashboard
-- Booking sheet: book or request a room from the search results; clashes are shown inline with a one-click
-  "Try 10:00–12:00?" suggestion; bookings can be cancelled from the dashboard
+Every feature in the project plan is built.
 
-- Day board: every room against the hours of one day, with a live current-time line. Click an empty
-  slot to book it, drag for longer, or use the keyboard; staff-only rooms are locked for students;
-  past time is dimmed; filter by building and step through days
+**Booking**
+- Free-room finder: smallest suitable room first, so big halls aren't used up by small groups
+- Booking sheet with clash detection that names what is in the way and offers the nearest free slot
+- Day board (every room against one day's hours) and room week view, both bookable by click, drag or keyboard
+- Weekly bookings for staff: 2–16 weeks, every week checked first, clashing weeks skipped on request, all in one transaction
+- Rules: 07:00–21:00, 30-minute slots, at most 6 hours, up to 150 days ahead, capacity; students request study, seminar and meeting rooms and wait for approval
+- Calendar export: an .ics file, or a private subscription link for Google Calendar, Outlook or Apple Calendar that stays up to date
+- "Campus Now" landing page with live room counts; dashboard with your next booking, Coming up and notifications
 
-- Approval queue for admins (Approvals in the top bar, with a count of requests waiting): reads like
-  an inbox, most urgent first; shows who is asking, the room that day and their history; A approves,
-  R rejects with an optional reason (quick reasons offered); a Decided tab lists recent decisions
+**Timetable office (admins)**
+- Approvals inbox for room requests and staff access requests, with keyboard shortcuts (A / R) and reasons
+- Rooms and buildings: add, edit, deactivate (upcoming bookings cancelled and people told), delete if never booked
+- People: change roles, correct details, deactivate accounts, reset passwords
+- Statistics: utilisation, busiest hours, purposes, per-room use with plain-language notes; table views and CSV
+- Audit log: every action as a sentence, filters, a failed-sign-in warning, CSV export
 
-- Room management for admins (Rooms in the top bar): add, edit and search buildings and rooms; set
-  seats, type, facilities and who can book; deactivate a room (its upcoming bookings are cancelled and
-  the people who booked are told, after a confirmation); delete rooms that were never booked
-
-- People for admins (People in the top bar): search by name, email or index number; make someone a
-  student, lecturer or admin (they're told, and it applies on their next click); correct details;
-  deactivate an account (upcoming bookings are cancelled after a confirmation). You can't change your
-  own role or deactivate yourself, and people in `ADMIN_EMAILS` can't be demoted here
-
-- Staff verification: at sign-up, people choose student, lecturer or timetable office (admin). Staff
-  give their staff ID, position and department and upload their offer or appointment letter (PDF, JPG
-  or PNG, up to 3 MB; phone photos are shrunk in the browser). They start with student access; admins
-  review the letter under Approvals → Staff access, tick three checks, and approve or reject with a
-  reason. The letter is deleted as soon as a decision is made; its SHA-256 fingerprint stays in the
-  audit log. Existing students can ask from their dashboard
-
-- Passwords: "Forgot your password?" tells the timetable office (same answer for any email, so it
-  can't reveal who has an account). An admin checks the person's ID and presses Reset password under
-  People: a one-time temporary password (shown once, valid 72 hours) is created and the account is
-  signed out everywhere. Signing in with it leads straight to "Choose a new password"; nothing else
-  works until that's done. Everyone can change their password from their name in the top bar, which
-  signs out their other devices
-
-- Statistics for admins (Statistics in the top bar), for any date range and building: room
-  utilisation (hours booked ÷ hours available, 07:00–21:00 on teaching days, approved bookings only)
-  with the change against the previous period; bookings, hours, student requests and the median time
-  to a decision; busiest hours; what rooms are booked for; utilisation per room with plain-language
-  notes on under-used and over-sized rooms. Every chart has a table view, and room figures download
-  as CSV
-
-- Room week view (click a room's code on the day board, in search results or in the admin rooms list):
-  Monday to Sunday across, time running down; the room's seats, type and facilities; click or drag
-  down an empty slot to book; keyboard arrows move by half-hour and by day; previous / this / next
-  week, and a date picker; the address (#/room/12?date=…) can be bookmarked or shared
-
-- Weekly bookings for lecturers and admins: tick "Repeat every week" in the booking sheet, choose 2–16
-  weeks, and check the dates first: each week shows free, or what is in the way. Book all of them, or
-  skip the weeks that clash; everything is booked in one transaction. Cancel one week, or every
-  remaining week of the series, from Coming up
-
-- Audit log for admins (Audit log in the top bar): every sign-in, booking and admin action as a plain
-  sentence, grouped by day, with the action code and IP address; filters for security, failed
-  sign-ins, bookings, rooms and people, a person's name or email, and dates; a warning when there
-  have been many failed sign-ins in 24 hours; CSV export. The database refuses any change to or
-  deletion of a log entry
-
-Next: recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
+**Accounts and security**
+- Staff verification: lecturers and admins upload an offer or appointment letter, checked by an admin; the letter is deleted after the decision and only its SHA-256 fingerprint is kept
+- Passwords hashed with bcrypt; sessions in an `httpOnly` cookie; every login token carries a session version, so a reset or password change signs out every device
+- Forgot password via the timetable office; one-time temporary passwords valid 72 hours; a new password is required before anything else works
+- **Double booking is impossible at the database level:** Postgres exclusion constraints per room and per person
+- The audit log is append-only: a database trigger refuses any change or deletion
+- CSRF header check, rate-limited sign-in, strict Content Security Policy, Row Level Security on every table
 
 ## Run it locally
 
