@@ -18,6 +18,16 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 
+-- Password reset (schema version 3).
+--   must_change_password      set by an admin reset: the person must choose a new password first
+--   temp_password_expires_at  a temporary password stops working after this
+--   session_version           part of every login token; bumping it signs the account out everywhere
+--   password_changed_at       last change or reset, so an old "forgot password" note can be cleared
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password     boolean     NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS temp_password_expires_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version          integer     NOT NULL DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at      timestamptz;
+
 CREATE TABLE IF NOT EXISTS buildings (
   id   integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   code text NOT NULL UNIQUE,

@@ -9,7 +9,7 @@ let opener = null;
 export function openEditSheet(title, ...content) {
   if (!sheet.open) opener = document.activeElement;
   $('[data-edit-title]', sheet).textContent = title;
-  body.replaceChildren(...content);
+  body.replaceChildren(...content.filter(Boolean));
   document.body.classList.add('has-sheet');
   if (!sheet.open) sheet.showModal();
 }

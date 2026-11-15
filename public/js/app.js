@@ -98,7 +98,11 @@ async function refreshNow() {
 /* ---------- Sign in / register ------------------------------------------------------ */
 
 function switchForm(name) {
-  for (const f of $$('.auth form')) f.hidden = f.dataset.form !== name;
+  for (const f of $$('[data-view="landing"] .auth form')) f.hidden = f.dataset.form !== name;
+  if (name === 'forgot') {
+    $('[data-forgot-done]').hidden = true;
+    $('[data-form="forgot"] [name=email]').value = $('[data-form="login"] [name=email]').value;
+  }
   $(`[data-form="${name}"] input`).focus();
 }
 
@@ -109,6 +113,8 @@ async function submitAuth(form, path) {
   try {
     const body = Object.fromEntries(new FormData(form));
     const { user } = await api(path, { method: 'POST', body });
+    // Signed in with a temporary password: keep it in memory just long enough to choose a new one.
+    state.tempPassword = user.mustChangePassword ? body.password : null;
     form.reset();
     await enterApp(user);
   } catch (err) {
@@ -417,9 +423,14 @@ async function loadDashboard() {
 
 async function enterApp(user) {
   state.user = user;
-  state.meta ??= await api('/rooms/meta');
   document.body.classList.replace('is-landing', 'is-app');
   $('[data-view="landing"]').hidden = true;
+  if (user.mustChangePassword) {
+    showPasswordView();
+    return;
+  }
+  $('[data-view="password"]').hidden = true;
+  state.meta ??= await api('/rooms/meta');
   $('[data-signed-in]').hidden = false;
   $('[data-user-name]').textContent = `${user.name} · ${user.role}`;
   $('[data-greeting]').textContent = greeting(user.name);
@@ -471,9 +482,126 @@ async function refreshPendingBadge() {
   try { setPendingBadge(await pendingCount()); } catch { /* keep the last count */ }
 }
 
+/* ---------- Passwords -------------------------------------------------------------- */
+
+async function submitForgot(form) {
+  showError(form, '');
+  const email = form.email.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError(form, 'Enter the email you registered with'); return; }
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  try {
+    await api('/auth/forgot-password', { method: 'POST', body: { email } });
+    const done = $('[data-forgot-done]', form);
+    done.textContent = `Done. If ${email} has an account, the timetable office has been told. `
+      + 'Visit or call them with your ID card to get a temporary password.';
+    done.hidden = false;
+  } catch (err) {
+    showError(form, err.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/** Shown instead of the app until someone who signed in with a temporary password picks their own. */
+function showPasswordView() {
+  for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = true;
+  $('[data-signed-in]').hidden = true;
+  hideBoard();
+  const view = $('[data-view="password"]');
+  view.hidden = false;
+  const form = $('[data-form="new-password"]', view);
+  form.reset();
+  showError(form, '');
+  // If we still have the temporary password from the sign-in just now, don't ask for it again.
+  $('[data-temp-field]', form).hidden = Boolean(state.tempPassword);
+  $(state.tempPassword ? '[name=newPassword]' : '[name=currentPassword]', form).focus();
+}
+
+function passwordProblem(pw, repeat) {
+  if (pw.length < 8) return 'Use at least 8 characters';
+  if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return 'Use at least one letter and one number';
+  if (pw !== repeat) return 'The two new passwords are different';
+  return null;
+}
+
+async function submitNewPassword(form) {
+  showError(form, '');
+  const currentPassword = state.tempPassword || form.currentPassword.value;
+  const problem = !currentPassword ? 'Enter the temporary password' : passwordProblem(form.newPassword.value, form.repeat.value);
+  if (problem) { showError(form, problem); return; }
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  try {
+    const { user } = await api('/auth/change-password', {
+      method: 'POST', body: { currentPassword, newPassword: form.newPassword.value },
+    });
+    state.tempPassword = null;
+    form.reset();
+    await enterApp(user);
+  } catch (err) {
+    // A wrong remembered password (e.g. typed with a slip) falls back to asking for it.
+    if (/current password/i.test(err.message)) {
+      state.tempPassword = null;
+      $('[data-temp-field]', form).hidden = false;
+    }
+    showError(form, err.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openAccountSheet() {
+  const u = state.user;
+  const field = (label, input, hint) => h('label', { class: 'field' }, h('span', { class: 'field__label' }, label), input,
+    hint ? h('span', { class: 'field__hint' }, hint) : null);
+  const current = h('input', { type: 'password', autocomplete: 'current-password' });
+  const next = h('input', { type: 'password', autocomplete: 'new-password' });
+  const repeat = h('input', { type: 'password', autocomplete: 'new-password' });
+  const done = h('p', { class: 'auth__done', role: 'status', hidden: true });
+  const submit = h('button', { class: 'button button--primary', type: 'submit' }, 'Change password');
+  const form = h('form', { class: 'form', novalidate: true },
+    h('h3', { class: 'panel__title' }, 'Change password'),
+    field('Current password', current),
+    field('New password', next, '8 or more characters, with a letter and a number'),
+    field('New password again', repeat),
+    h('p', { class: 'alert', 'data-error': '', hidden: true }),
+    done,
+    h('div', { class: 'sheet__actions' }, submit,
+      h('button', { class: 'button button--secondary', type: 'button', onclick: closeEditSheet }, 'Close')));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError(form, '');
+    done.hidden = true;
+    const problem = !current.value ? 'Enter your current password' : passwordProblem(next.value, repeat.value);
+    if (problem) { showError(form, problem); return; }
+    submit.disabled = true;
+    try {
+      await api('/auth/change-password', { method: 'POST', body: { currentPassword: current.value, newPassword: next.value } });
+      form.reset();
+      done.textContent = 'Password changed. Anywhere else you were signed in has been signed out.';
+      done.hidden = false;
+    } catch (err) {
+      showError(form, err.message);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  openEditSheet('Your account',
+    h('div', { class: 'requester' },
+      h('p', { class: 'requester__name serif' }, u.name),
+      h('p', { class: 'requester__meta mono' }, u.email),
+      h('p', { class: 'requester__ago' }, [u.role[0].toUpperCase() + u.role.slice(1), u.department, u.indexNumber && `Index ${u.indexNumber}`]
+        .filter(Boolean).join(' · '))),
+    form);
+  current.focus();
+}
+
 function leaveApp() {
   state.user = null;
+  state.tempPassword = null;
   state.accessError = null;
+  $('[data-view="password"]').hidden = true;
   document.body.classList.replace('is-app', 'is-landing');
   $('[data-view="landing"]').hidden = false;
   for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = true;
@@ -502,9 +630,20 @@ function init() {
   for (const b of $$('[data-switch]')) b.addEventListener('click', () => switchForm(b.dataset.switch));
   window.addEventListener('hashchange', () => { route(); });
   $('[data-form="find"]').addEventListener('submit', (e) => { e.preventDefault(); findRooms(e.target); });
-  $('[data-sign-out]').addEventListener('click', async () => {
-    await api('/auth/logout', { method: 'POST' }).catch(() => {});
-    leaveApp();
+  for (const b of $$('[data-sign-out]')) {
+    b.addEventListener('click', async () => {
+      await api('/auth/logout', { method: 'POST' }).catch(() => {});
+      leaveApp();
+    });
+  }
+  $('[data-form="forgot"]').addEventListener('submit', (e) => { e.preventDefault(); submitForgot(e.target); });
+  $('[data-form="new-password"]').addEventListener('submit', (e) => { e.preventDefault(); submitNewPassword(e.target); });
+  $('[data-account]').addEventListener('click', openAccountSheet);
+  // The server says a new password is needed (e.g. reset by an admin while this tab was open).
+  window.addEventListener('must-change-password', () => {
+    if (!state.user) return;
+    state.user.mustChangePassword = true;
+    showPasswordView();
   });
 
   api('/auth/me').then(({ user }) => enterApp(user)).catch(() => {});

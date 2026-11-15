@@ -64,6 +64,9 @@ router.delete('/rooms/:id', async (req, res) => {
 /* ---------- People ------------------------------------------------------------------ */
 
 router.get('/users', async (req, res) => res.json(await userAdmin.list(req.query)));
+router.post('/users/:id/reset-password', async (req, res) => {
+  res.json(await userAdmin.resetPassword(req.user, parseId(req.params.id, 'Person'), { ip: req.ip }));
+});
 router.patch('/users/:id', async (req, res) => {
   res.json(await userAdmin.update(req.user, parseId(req.params.id, 'Person'), req.body ?? {}, { ip: req.ip }));
 });

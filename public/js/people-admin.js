@@ -33,7 +33,9 @@ function row(u) {
   return h('div', { class: `rt-row pt-row${u.is_active ? '' : ' rt-row--inactive'}`, role: 'row' },
     h('span', { class: 'pt-person', role: 'cell' },
       h('span', { class: 'pt-name' }, u.name, you ? h('span', { class: 'tag tag--pending' }, 'you') : null,
-        u.is_active ? null : h('span', { class: 'tag tag--cancelled' }, 'inactive')),
+        u.is_active ? null : h('span', { class: 'tag tag--cancelled' }, 'inactive'),
+        u.reset_requested_at ? h('span', { class: 'tag tag--approved', title: `Asked ${ago(u.reset_requested_at)}` }, 'forgot password') : null,
+        u.must_change_password && !u.reset_requested_at ? h('span', { class: 'tag tag--pending' }, 'temporary password') : null),
       h('span', { class: 'pt-email mono' }, u.email)),
     h('span', { class: `pt-role pt-role--${u.role}`, role: 'cell' }, ROLES[u.role].label),
     // Empty cells show "—" on wide screens and disappear on phones (see app.css).
@@ -164,8 +166,63 @@ function openPerson(u) {
       : h('button', { class: 'button button--secondary', type: 'button', onclick: () => setActive(true) }, 'Reactivate account')),
     h('p', { class: 'field__hint' }, 'A deactivated person is signed out at once and cannot sign in again until reactivated.'));
 
-  openEditSheet(`Edit ${u.name}`, form, account);
+  openEditSheet(`Edit ${u.name}`, form, account, you ? null : passwordSection(u));
   (locked ? name : form.querySelector('input[name="role"]:checked') || name).focus();
+}
+
+/**
+ * Reset password: makes a one-time temporary password, shows it once, and signs the person
+ * out everywhere. Needs a second click, because it locks them out until they get the code.
+ */
+function passwordSection(u) {
+  const out = h('div', { class: 'temp', hidden: true, role: 'status' });
+  let armed = null;
+  const button = h('button', { class: 'button button--secondary', type: 'button' }, 'Reset password');
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      button.textContent = 'Click again to reset';
+      armed = setTimeout(() => { armed = null; button.textContent = 'Reset password'; }, 4000);
+      return;
+    }
+    clearTimeout(armed);
+    armed = null;
+    button.disabled = true;
+    try {
+      const r = await api(`/admin/users/${u.id}/reset-password`, { method: 'POST' });
+      const until = new Date(r.expiresAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const copy = h('button', { class: 'button button--ink', type: 'button' }, 'Copy');
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(r.temporaryPassword); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy it'; }
+      });
+      out.replaceChildren(
+        h('p', { class: 'temp__label' }, `Temporary password for ${u.name}`),
+        h('p', { class: 'temp__code mono', 'aria-label': r.temporaryPassword.split('').join(' ') }, r.temporaryPassword),
+        h('div', { class: 'temp__row' }, copy),
+        h('p', { class: 'temp__hint' }, `Give it to ${u.name.split(' ')[0]} in person or by phone, after checking their ID card. `
+          + `It works until ${until}, and they choose their own password when they sign in. `
+          + 'It is shown only now: close this and it can’t be seen again.'),
+        ...(r.isActive ? [] : [h('p', { class: 'temp__hint' }, 'This account is deactivated: reactivate it too, or they still can’t sign in.')]));
+      out.hidden = false;
+      button.textContent = 'Password reset';
+      load();
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = 'Reset password';
+      out.replaceChildren(h('p', {}, err.message));
+      out.hidden = false;
+    }
+  });
+  return h('section', { class: 'danger' },
+    h('h3', { class: 'panel__title' }, 'Password'),
+    u.reset_requested_at
+      ? h('p', { class: 'decide__note' }, `${u.name.split(' ')[0]} said they forgot their password ${ago(u.reset_requested_at)}. Check their ID before resetting.`)
+      : null,
+    h('p', { class: 'danger__status' }, u.must_change_password
+      ? 'Has a temporary password and hasn’t chosen their own yet.'
+      : 'Forgot their password? Reset it to give them a temporary one.'),
+    h('div', { class: 'sheet__actions' }, button),
+    out,
+    h('p', { class: 'field__hint' }, 'Resetting signs them out on every device straight away.'));
 }
 
 /* ---------- Wiring --------------------------------------------------------------------- */

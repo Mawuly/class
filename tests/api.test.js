@@ -1,7 +1,7 @@
 'use strict';
 const { test, before, beforeEach, after, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { db, agent, signedIn, resetDb, roomId, tomorrow, PASSWORD } = require('./helpers');
+const { app, db, request, agent, signedIn, resetDb, roomId, tomorrow, PASSWORD } = require('./helpers');
 const { localDate, addDays } = require('../src/utils/time');
 
 before(resetDb);
@@ -709,6 +709,114 @@ describe('staff access requests', () => {
     const res = await ask(applicant);
     assert.equal(res.status, 201);
     const v = await db.get("SELECT value FROM app_meta WHERE key = 'schema_version'");
-    assert.equal(v.value, '2');
+    assert.equal(v.value, String(require('../src/db/setup').SCHEMA_VERSION));
+  });
+});
+
+describe('passwords', () => {
+  let admin; let person;
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('desk@campus.test', 'admin');
+    person = await signedIn('ama.forgot@campus.test');
+  });
+
+  const login = (email, password) => {
+    const a = agent();
+    return a.post('/api/auth/login').send({ email, password }).then((res) => Object.assign(a, { res }));
+  };
+
+  test('temporary passwords are 12 easy-to-read characters', () => {
+    const { temporaryPassword } = require('../src/services/userAdmin');
+    for (let i = 0; i < 50; i++) assert.match(temporaryPassword(), /^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/);
+  });
+
+  test('admin reset: old password stops working, temporary one works once, then a new password is required', async () => {
+    const reset = await admin.post(`/api/admin/users/${person.user.id}/reset-password`);
+    assert.equal(reset.status, 200);
+    const temp = reset.body.temporaryPassword;
+    assert.ok(new Date(reset.body.expiresAt) > new Date(Date.now() + 71 * 3600e3));
+
+    // Signed out everywhere, old password dead
+    assert.equal((await person.get('/api/auth/me')).status, 401);
+    assert.equal((await login('ama.forgot@campus.test', PASSWORD)).res.status, 401);
+
+    // Temporary password signs in, but only the password change is allowed
+    const t = await login('ama.forgot@campus.test', temp);
+    assert.equal(t.res.status, 200);
+    assert.equal(t.res.body.user.mustChangePassword, true);
+    const blocked = await t.get('/api/bookings/mine');
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.body.mustChangePassword, true);
+    assert.equal((await t.get('/api/auth/me')).status, 200);
+
+    // Choose a new one
+    const weak = await t.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: 'short' });
+    assert.equal(weak.status, 400);
+    const ok = await t.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: 'MyOwnPass9' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.user.mustChangePassword, false);
+    assert.equal((await t.get('/api/bookings/mine')).status, 200); // same session carries on
+    assert.equal((await login('ama.forgot@campus.test', temp)).res.status, 401); // temp is dead
+    assert.equal((await login('ama.forgot@campus.test', 'MyOwnPass9')).res.status, 200);
+
+    // The person is told, and it's audited without the password
+    const notes = await t.get('/api/notifications');
+    assert.ok(notes.body.notifications.some((n) => /password was reset by the timetable office/.test(n.message)));
+    const row = await db.get("SELECT details FROM audit_log WHERE action = 'user.reset_password'");
+    assert.equal(row.details, null);
+    const stored = await db.get('SELECT password_hash FROM users WHERE id = ?', [person.user.id]);
+    assert.ok(!stored.password_hash.includes(temp));
+  });
+
+  test('a temporary password expires after 72 hours', async () => {
+    const { body } = await admin.post(`/api/admin/users/${person.user.id}/reset-password`);
+    await db.run("UPDATE users SET temp_password_expires_at = now() - interval '1 minute' WHERE id = ?", [person.user.id]);
+    const res = (await login('ama.forgot@campus.test', body.temporaryPassword)).res;
+    assert.equal(res.status, 401);
+    assert.match(res.body.error, /expired/);
+  });
+
+  test('only admins can reset, and not their own password', async () => {
+    assert.equal((await person.post(`/api/admin/users/${admin.user.id}/reset-password`)).status, 403);
+    assert.equal((await admin.post(`/api/admin/users/${admin.user.id}/reset-password`)).status, 403);
+  });
+
+  test('changing your own password signs out your other devices but keeps this one', async () => {
+    const other = await login('ama.forgot@campus.test', PASSWORD);
+    const wrong = await person.post('/api/auth/change-password').send({ currentPassword: 'Nope12345', newPassword: 'Another99' });
+    assert.equal(wrong.status, 400);
+    const same = await person.post('/api/auth/change-password').send({ currentPassword: PASSWORD, newPassword: PASSWORD });
+    assert.equal(same.status, 400);
+    const ok = await person.post('/api/auth/change-password').send({ currentPassword: PASSWORD, newPassword: 'Another99' });
+    assert.equal(ok.status, 200);
+    assert.equal((await person.get('/api/auth/me')).status, 200);
+    assert.equal((await other.get('/api/auth/me')).status, 401);
+  });
+
+  test('forgot password: same answer for any email, admins told at most once an hour, flag shown until reset', async () => {
+    const known = await agent().post('/api/auth/forgot-password').send({ email: 'AMA.FORGOT@campus.test' });
+    const unknown = await agent().post('/api/auth/forgot-password').send({ email: 'nobody@campus.test' });
+    assert.equal(known.status, 200);
+    assert.deepEqual(known.body, unknown.body);
+    await agent().post('/api/auth/forgot-password').send({ email: 'ama.forgot@campus.test' });
+    const notes = (await admin.get('/api/notifications')).body.notifications.filter((n) => /forgotten their password/.test(n.message));
+    assert.equal(notes.length, 1);
+
+    const before = (await admin.get('/api/admin/users?q=ama.forgot')).body.users[0];
+    assert.ok(before.reset_requested_at);
+    await admin.post(`/api/admin/users/${person.user.id}/reset-password`);
+    const after = (await admin.get('/api/admin/users?q=ama.forgot')).body.users[0];
+    assert.equal(after.reset_requested_at, null);
+    assert.equal(after.must_change_password, true);
+  });
+
+  test('sessions from before this release keep working', async () => {
+    const jwt = require('jsonwebtoken');
+    const config = require('../src/config');
+    const old = jwt.sign({ sub: person.user.id }, config.jwtSecret, { expiresIn: 600 }); // no "v"
+    const res = await request(app).get('/api/auth/me').set('Cookie', `token=${old}`).set('X-Requested-With', 'XMLHttpRequest');
+    assert.equal(res.status, 200);
   });
 });

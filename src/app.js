@@ -4,7 +4,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const config = require('./config');
-const { authenticate } = require('./middleware/auth');
+const { authenticate, requirePasswordChosen } = require('./middleware/auth');
 const { requireXhr } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { AppError } = require('./utils/errors');
@@ -54,6 +54,7 @@ api.use(async (req, res, next) => {
 });
 api.use(requireXhr);
 api.use(authenticate);
+api.use(requirePasswordChosen);
 api.use('/public', require('./routes/public'));
 api.use('/auth', require('./routes/auth'));
 api.use('/rooms', require('./routes/rooms'));

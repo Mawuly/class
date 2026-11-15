@@ -40,6 +40,13 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   reason. The letter is deleted as soon as a decision is made; its SHA-256 fingerprint stays in the
   audit log. Existing students can ask from their dashboard
 
+- Passwords: "Forgot your password?" tells the timetable office (same answer for any email, so it
+  can't reveal who has an account). An admin checks the person's ID and presses Reset password under
+  People: a one-time temporary password (shown once, valid 72 hours) is created and the account is
+  signed out everywhere. Signing in with it leads straight to "Choose a new password"; nothing else
+  works until that's done. Everyone can change their password from their name in the top bar, which
+  signs out their other devices
+
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally

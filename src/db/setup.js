@@ -11,7 +11,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 // Bump whenever schema.sql changes. Every statement in it is idempotent, so an existing database
 // is brought up to date by running the whole file again once.
 //   1: first release   2: access_requests (staff verification) and app_meta
-const SCHEMA_VERSION = 2;
+//   3: password reset columns on users
+const SCHEMA_VERSION = 3;
 
 let ready = null;
 

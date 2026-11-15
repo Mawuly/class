@@ -24,6 +24,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     throw new ApiError('Could not reach the server. Check your connection and try again.', 0, {});
   }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 403 && data.mustChangePassword) window.dispatchEvent(new Event('must-change-password'));
   if (!res.ok) throw new ApiError(data.error || 'Something went wrong', res.status, data);
   return data;
 }
