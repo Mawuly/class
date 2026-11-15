@@ -8,20 +8,37 @@ const { seedReference, seedDemo } = require('./seed');
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 
+// Bump whenever schema.sql changes. Every statement in it is idempotent, so an existing database
+// is brought up to date by running the whole file again once.
+//   1: first release   2: access_requests (staff verification) and app_meta
+const SCHEMA_VERSION = 2;
+
 let ready = null;
 
+async function schemaVersion(x) {
+  const { has } = await x.get("SELECT to_regclass('public.app_meta') IS NOT NULL AS has");
+  if (!has) return 0;
+  const row = await x.get("SELECT value FROM app_meta WHERE key = 'schema_version'");
+  return row ? Number(row.value) : 0;
+}
+
 /**
- * Creates the tables and loads the rooms the first time the app meets an empty database,
- * so a fresh Supabase project works with no manual steps. Runs once per server instance.
- * An advisory lock stops two Vercel instances that start together from both doing it.
+ * Creates or updates the tables, and loads the rooms the first time the app meets an empty
+ * database, so a fresh or older Supabase database works with no manual steps. Runs once per
+ * server instance. An advisory lock stops two Vercel instances from doing it at the same time.
  */
 function ensureReady() {
   ready ??= db.tx(async (x) => {
     await x.run('SELECT pg_advisory_xact_lock(?)', [LOCK_ID]);
-    const { exists } = await x.get("SELECT to_regclass('public.bookings') IS NOT NULL AS exists");
-    if (!exists) {
-      console.log('[setup] creating tables');
+    const version = await schemaVersion(x);
+    if (version < SCHEMA_VERSION) {
+      console.log(`[setup] bringing the database schema from version ${version} to ${SCHEMA_VERSION}`);
       await x.run(schema);
+      await x.run(
+        `INSERT INTO app_meta (key, value) VALUES ('schema_version', ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+        [String(SCHEMA_VERSION)],
+      );
     }
     const { rooms } = await x.get('SELECT count(*)::int AS rooms FROM rooms');
     if (rooms === 0) {
@@ -47,4 +64,4 @@ function resetSetupState() {
   ready = null;
 }
 
-module.exports = { ensureReady, resetSetupState };
+module.exports = { ensureReady, resetSetupState, SCHEMA_VERSION };

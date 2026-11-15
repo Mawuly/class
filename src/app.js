@@ -33,6 +33,9 @@ app.use(helmet({
     },
   },
 }));
+// Staff access requests carry a letter of up to 3 MB (about 4 MB as base64). Vercel caps request
+// bodies at 4.5 MB. Every other route keeps a small limit.
+app.use('/api/access-requests', express.json({ limit: '4400kb' }));
 app.use(express.json({ limit: '20kb' }));
 app.use(cookieParser());
 
@@ -57,6 +60,7 @@ api.use('/rooms', require('./routes/rooms'));
 api.use('/bookings', require('./routes/bookings'));
 api.use('/admin', require('./routes/admin'));
 api.use('/notifications', require('./routes/notifications'));
+api.use('/access-requests', require('./routes/access'));
 api.use(notFound);
 app.use('/api', api);
 

@@ -110,6 +110,38 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at);
 
+-- Requests for lecturer or admin access, made at sign-up with an offer or appointment letter.
+-- The letter itself is deleted when an admin decides; its SHA-256 fingerprint is kept as a record
+-- of exactly which file was checked, without keeping the personal data it contains.
+CREATE TABLE IF NOT EXISTS access_requests (
+  id              integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id         integer     NOT NULL REFERENCES users(id),
+  role            text        NOT NULL CHECK (role IN ('lecturer', 'admin')),
+  staff_id        text        NOT NULL,
+  position        text        NOT NULL,
+  department      text,
+  note            text,
+  document        bytea,
+  document_name   text        NOT NULL,
+  document_type   text        NOT NULL CHECK (document_type IN ('application/pdf', 'image/jpeg', 'image/png')),
+  document_size   integer     NOT NULL CHECK (document_size > 0),
+  document_sha256 text        NOT NULL,
+  status          text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  decided_by      integer     REFERENCES users(id),
+  decision_reason text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  decided_at      timestamptz
+);
+-- One open request per person at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS access_requests_one_pending ON access_requests (user_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests (status, created_at);
+
+-- Which version of this file the database has been brought up to (see db/setup.js).
+CREATE TABLE IF NOT EXISTS app_meta (
+  key   text PRIMARY KEY,
+  value text NOT NULL
+);
+
 -- Supabase publishes every table in the public schema through its REST API using the public
 -- "anon" key. Row Level Security with no policies closes that door: only this server, which
 -- connects as the table owner, can read or write the data.
@@ -120,3 +152,5 @@ ALTER TABLE booking_series ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_meta       ENABLE ROW LEVEL SECURITY;

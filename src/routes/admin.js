@@ -3,6 +3,7 @@ const express = require('express');
 const bookings = require('../services/bookings');
 const roomAdmin = require('../services/roomAdmin');
 const userAdmin = require('../services/userAdmin');
+const access = require('../services/access');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
@@ -65,6 +66,40 @@ router.delete('/rooms/:id', async (req, res) => {
 router.get('/users', async (req, res) => res.json(await userAdmin.list(req.query)));
 router.patch('/users/:id', async (req, res) => {
   res.json(await userAdmin.update(req.user, parseId(req.params.id, 'Person'), req.body ?? {}, { ip: req.ip }));
+});
+
+/* ---------- Staff access requests --------------------------------------------------- */
+
+router.get('/pending-counts', async (req, res) => {
+  const [bookingsWaiting, accessWaiting] = await Promise.all([
+    bookings.listByStatus('pending').then((b) => b.length),
+    access.pendingCount(),
+  ]);
+  res.json({ bookings: bookingsWaiting, access: accessWaiting });
+});
+
+router.get('/access-requests', async (req, res) => {
+  res.json({ requests: await access.list(req.query.status === 'decided' ? 'decided' : 'pending') });
+});
+
+// The uploaded letter itself. Shown inline in the browser; never cached.
+router.get('/access-requests/:id/document', async (req, res) => {
+  const doc = await access.document(parseId(req.params.id, 'Request'));
+  res.set({
+    'Content-Type': doc.document_type,
+    'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(doc.document_name)}`,
+    'Cache-Control': 'no-store, private',
+    // Images may be shown in the review panel on this site; nothing else may frame the file.
+    'Cross-Origin-Resource-Policy': 'same-origin',
+  });
+  res.send(doc.document);
+});
+
+router.post('/access-requests/:id/approve', async (req, res) => {
+  res.json(await access.decide(req.user, parseId(req.params.id, 'Request'), 'approved', null, { ip: req.ip }));
+});
+router.post('/access-requests/:id/reject', async (req, res) => {
+  res.json(await access.decide(req.user, parseId(req.params.id, 'Request'), 'rejected', req.body?.reason, { ip: req.ip }));
 });
 
 // Stats and the audit log come next.

@@ -273,7 +273,7 @@ describe('zero-step setup', () => {
   const { resetSetupState } = require('../src/db/setup');
 
   test('a brand-new empty database gets its tables and rooms on the first request', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const res = await agent().get('/api/public/now');
     assert.equal(res.status, 200);
@@ -285,7 +285,7 @@ describe('zero-step setup', () => {
   });
 
   test('setup runs safely when several requests arrive at once', async () => {
-    await db.pool.query(`DROP TABLE IF EXISTS audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
+    await db.pool.query(`DROP TABLE IF EXISTS app_meta, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users CASCADE`);
     resetSetupState();
     const results = await Promise.all([1, 2, 3, 4].map(() => agent().get('/api/public/now')));
     assert.deepEqual(results.map((r) => r.status), [200, 200, 200, 200]);
@@ -598,5 +598,117 @@ describe('user management', () => {
     await admin.patch(`/api/admin/users/${student.user.id}`).send({ role: 'lecturer' });
     const row = await db.get("SELECT details FROM audit_log WHERE action = 'user.role_change'");
     assert.deepEqual(row.details, { role: 'lecturer', from: 'student' });
+  });
+});
+
+describe('staff access requests', () => {
+  const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n');
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+  const letter = (buf = PDF, name = 'Offer letter.pdf') => ({ name, type: 'application/pdf', data: buf.toString('base64') });
+  let admin; let applicant;
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('office@campus.test', 'admin');
+    applicant = await signedIn('newstaff@campus.test');
+  });
+
+  const ask = (who, extra = {}) => who.post('/api/access-requests').send({
+    role: 'lecturer', staffId: 'UG/STF/2291', position: 'Lecturer', department: 'Physics', document: letter(), ...extra,
+  });
+
+  test('a request with a letter is stored and admins are told', async () => {
+    const res = await ask(applicant);
+    assert.equal(res.status, 201);
+    assert.equal(res.body.request.status, 'pending');
+    assert.equal(res.body.request.document_type, 'application/pdf');
+    assert.equal(res.body.request.document_sha256.length, 64);
+    assert.equal(res.body.request.document, undefined); // the file never comes back to the requester
+    assert.equal((await applicant.get('/api/auth/me')).body.user.role, 'student'); // nothing granted yet
+    const notes = await admin.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /asked for lecturer access/);
+    const counts = await admin.get('/api/admin/pending-counts');
+    assert.deepEqual(counts.body, { bookings: 0, access: 1 });
+  });
+
+  test('only real PDF, JPG or PNG files under 3 MB are accepted', async () => {
+    const fake = await ask(applicant, { document: letter(Buffer.from('MZ this is an exe'), 'letter.pdf') });
+    assert.equal(fake.status, 400);
+    assert.match(fake.body.error, /PDF, JPG or PNG/);
+    const big = await ask(applicant, { document: letter(Buffer.concat([PDF, Buffer.alloc(3 * 1024 * 1024)])) });
+    assert.equal(big.status, 413);
+    const none = await ask(applicant, { document: undefined });
+    assert.equal(none.status, 400);
+    const png = await ask(applicant, { document: { name: 'scan.png', data: PNG.toString('base64') } });
+    assert.equal(png.status, 201);
+    assert.equal(png.body.request.document_type, 'image/png');
+  });
+
+  test('staff ID and position are required, and only one request can wait at a time', async () => {
+    assert.equal((await ask(applicant, { staffId: '' })).status, 400);
+    assert.equal((await ask(applicant, { position: '' })).status, 400);
+    assert.equal((await ask(applicant, { role: 'student' })).status, 400);
+    assert.equal((await ask(applicant)).status, 201);
+    const again = await ask(applicant, { role: 'admin' });
+    assert.equal(again.status, 409);
+  });
+
+  test('admins see the queue and the letter; nobody else can open the letter', async () => {
+    const req = (await ask(applicant)).body.request;
+    const list = await admin.get('/api/admin/access-requests');
+    assert.equal(list.body.requests[0].user_email, 'newstaff@campus.test');
+    assert.equal(list.body.requests[0].has_document, true);
+    const doc = await admin.get(`/api/admin/access-requests/${req.id}/document`);
+    assert.equal(doc.status, 200);
+    assert.equal(doc.headers['content-type'], 'application/pdf');
+    assert.match(doc.headers['content-disposition'], /^inline; filename\*=UTF-8''Offer%20letter\.pdf/);
+    assert.equal(Buffer.from(doc.body).subarray(0, 5).toString(), '%PDF-');
+    assert.equal((await applicant.get(`/api/admin/access-requests/${req.id}/document`)).status, 403);
+    assert.equal((await agent().get(`/api/admin/access-requests/${req.id}/document`)).status, 401);
+  });
+
+  test('approving grants the role at once, tells the person, and deletes the letter', async () => {
+    const req = (await ask(applicant)).body.request;
+    const ok = await admin.post(`/api/admin/access-requests/${req.id}/approve`);
+    assert.equal(ok.status, 200);
+    assert.equal((await applicant.get('/api/auth/me')).body.user.role, 'lecturer');
+    const notes = await applicant.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /lecturer access was approved/);
+    const row = await db.get('SELECT document, document_sha256 FROM access_requests WHERE id = ?', [req.id]);
+    assert.equal(row.document, null);
+    assert.equal(row.document_sha256, req.document_sha256); // the fingerprint is kept
+    assert.equal((await admin.get(`/api/admin/access-requests/${req.id}/document`)).status, 410);
+    const audit = await db.get("SELECT details FROM audit_log WHERE action = 'access.approve'");
+    assert.equal(audit.details.letter_sha256, req.document_sha256);
+    assert.equal((await admin.post(`/api/admin/access-requests/${req.id}/reject`)).status, 409);
+  });
+
+  test('rejecting keeps the role, gives the reason, deletes the letter, and allows a new request', async () => {
+    const req = (await ask(applicant, { role: 'admin', position: 'Timetable Officer' })).body.request;
+    await admin.post(`/api/admin/access-requests/${req.id}/reject`).send({ reason: 'Please upload a clearer copy' });
+    assert.equal((await applicant.get('/api/auth/me')).body.user.role, 'student');
+    const mine = await applicant.get('/api/access-requests/mine');
+    assert.equal(mine.body.request.status, 'rejected');
+    assert.equal(mine.body.request.decision_reason, 'Please upload a clearer copy');
+    assert.equal(mine.body.request.has_document, false);
+    assert.equal((await ask(applicant, { role: 'admin', position: 'Timetable Officer' })).status, 201);
+  });
+
+  test('an admin cannot approve their own request, and students cannot decide', async () => {
+    const req = (await ask(applicant)).body.request;
+    assert.equal((await applicant.post(`/api/admin/access-requests/${req.id}/approve`)).status, 403);
+    // A lecturer asking for admin, who is later made admin by someone else, still can't decide their own request
+    await db.run("UPDATE users SET role = 'admin' WHERE id = ?", [applicant.user.id]);
+    assert.equal((await applicant.post(`/api/admin/access-requests/${req.id}/approve`)).status, 403);
+  });
+
+  test('an older database is upgraded automatically on the next request', async () => {
+    const { resetSetupState } = require('../src/db/setup');
+    await db.pool.query('DROP TABLE access_requests; DROP TABLE app_meta;');
+    resetSetupState();
+    const res = await ask(applicant);
+    assert.equal(res.status, 201);
+    const v = await db.get("SELECT value FROM app_meta WHERE key = 'schema_version'");
+    assert.equal(v.value, '2');
   });
 });

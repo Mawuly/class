@@ -33,6 +33,13 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   deactivate an account (upcoming bookings are cancelled after a confirmation). You can't change your
   own role or deactivate yourself, and people in `ADMIN_EMAILS` can't be demoted here
 
+- Staff verification: at sign-up, people choose student, lecturer or timetable office (admin). Staff
+  give their staff ID, position and department and upload their offer or appointment letter (PDF, JPG
+  or PNG, up to 3 MB; phone photos are shrunk in the browser). They start with student access; admins
+  review the letter under Approvals → Staff access, tick three checks, and approve or reject with a
+  reason. The letter is deleted as soon as a decision is made; its SHA-256 fingerprint stays in the
+  audit log. Existing students can ask from their dashboard
+
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally
@@ -85,8 +92,10 @@ time it meets an empty database.
    - **Or by hand:** in Supabase click **Connect**, copy the **Transaction pooler** string (port 6543,
      host ends in `pooler.supabase.com`), put your password in place of `[YOUR-PASSWORD]`, and add it in
      Vercel → Settings → Environment Variables as `DATABASE_URL`.
-4. **Make yourself the admin:** in Vercel → Settings → Environment Variables add `ADMIN_EMAILS` with your
-   email address (several can be separated by commas).
+4. **Make yourself the first admin:** in Vercel → Settings → Environment Variables add `ADMIN_EMAILS`
+   with your email address (several can be separated by commas). Someone has to review the first staff
+   request; after that, new lecturers and admins sign up with their offer letter and you approve them
+   under Approvals → Staff access.
 5. **Redeploy** (Deployments → latest → ⋯ → Redeploy). Settings only reach deployments made after you add them.
 6. Open `https://<your-site>.vercel.app/api/health`. When it shows `"ok": true`, open the site and
    **register with the email from step 4**. You are now the admin.

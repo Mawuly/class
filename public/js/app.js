@@ -4,6 +4,8 @@ import { showBoard, hideBoard } from './board.js';
 import { showApprovals, pendingCount } from './approvals.js';
 import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
+import { staffFields, ROLE_LABEL } from './access-form.js';
+import { openEditSheet, closeEditSheet } from './edit-sheet.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -114,6 +116,143 @@ async function submitAuth(form, path) {
   } finally {
     button.disabled = false;
   }
+}
+
+/* ---------- Sign-up with staff verification ---------------------------------------- */
+
+let registerStaff = null;
+
+function accountType() {
+  return $('[data-form="register"] input[name="accountType"]:checked').value;
+}
+
+function onAccountTypeChange() {
+  const staff = accountType() !== 'student';
+  $('[data-student-only]').hidden = staff;
+  $('[data-staff-slot]').hidden = !staff;
+  $('[data-register-submit]').textContent = staff ? 'Create account and send letter' : 'Create account';
+}
+
+async function submitRegister(form) {
+  showError(form, '');
+  const type = accountType();
+  const staff = type !== 'student';
+  if (staff) {
+    const problem = registerStaff.validate();
+    if (problem) { showError(form, problem); return; }
+  }
+  const button = $('[data-register-submit]', form);
+  button.disabled = true;
+  try {
+    const fd = new FormData(form);
+    const body = { name: fd.get('name'), email: fd.get('email'), password: fd.get('password') };
+    if (!staff) Object.assign(body, { indexNumber: fd.get('indexNumber'), department: fd.get('department') });
+    const { user } = await api('/auth/register', { method: 'POST', body });
+    // The account exists now. If sending the letter fails, the dashboard offers to try again.
+    if (staff) {
+      button.textContent = 'Sending your letter…';
+      try {
+        await registerStaff.send(type);
+      } catch (err) {
+        state.accessError = { role: type, message: err.message };
+      }
+    }
+    form.reset();
+    registerStaff = staffFields();
+    $('[data-staff-slot]').replaceChildren(registerStaff.el);
+    onAccountTypeChange();
+    await enterApp(user);
+  } catch (err) {
+    showError(form, err.message);
+    onAccountTypeChange();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+/* ---------- Staff access: status banner and request sheet --------------------------- */
+
+function since(iso) {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+/** Roles this person could still ask for. */
+function requestableRoles() {
+  return { student: ['lecturer', 'admin'], lecturer: ['admin'] }[state.user.role] || [];
+}
+
+function renderAccessBanner(request) {
+  const banner = $('[data-access-banner]');
+  const roles = requestableRoles();
+  const askButton = (label) => h('button', { class: 'link-button', type: 'button', onclick: openAccessSheet }, label);
+  let content = null;
+  let kind = 'quiet';
+  if (state.accessError) {
+    kind = 'problem';
+    content = [h('p', {}, `Your account was created, but your letter for ${ROLE_LABEL[state.accessError.role].toLowerCase()} `
+      + `access was not sent: ${state.accessError.message} `), askButton('Send it again')];
+  } else if (request?.status === 'pending') {
+    kind = 'pending';
+    content = [
+      h('p', {}, h('b', {}, `Your request for ${ROLE_LABEL[request.role].toLowerCase()} access is being checked`),
+        ` by the timetable office. Until then you have ${state.user.role} access.`),
+      h('p', { class: 'mono access-banner__meta' }, `Sent ${since(request.created_at)} · ${request.document_name}`)];
+  } else if (request?.status === 'rejected' && roles.includes(request.role)) {
+    kind = 'problem';
+    content = [h('p', {}, `Your request for ${ROLE_LABEL[request.role].toLowerCase()} access was not approved.`
+      + `${request.decision_reason ? ` Reason: ${request.decision_reason.replace(/([^.!?])$/, '$1.')}` : ''} `),
+    askButton('Send a new request')];
+  } else if (roles.length) {
+    content = [h('p', {}, state.user.role === 'student' ? 'Staff member? ' : 'Work in the timetable office? ',
+      askButton(state.user.role === 'student' ? 'Request lecturer or admin access' : 'Request admin access'))];
+  }
+  banner.className = `access-banner access-banner--${kind}`;
+  banner.replaceChildren(...(content || []));
+  banner.hidden = !content;
+}
+
+async function loadAccessBanner() {
+  if (!requestableRoles().length && !state.accessError) { renderAccessBanner(null); return; }
+  try {
+    const { request } = await api('/access-requests/mine');
+    renderAccessBanner(request);
+  } catch { /* the banner is optional */ }
+}
+
+function openAccessSheet() {
+  const roles = state.accessError ? [state.accessError.role] : requestableRoles();
+  const fields = staffFields({ roles, department: state.user.department || '' });
+  const submit = h('button', { class: 'button button--primary', type: 'submit' }, 'Send for checking');
+  const form = h('form', { class: 'form', novalidate: true }, fields.el,
+    h('p', { class: 'alert', 'data-error': '', hidden: true }),
+    h('div', { class: 'sheet__actions' }, submit,
+      h('button', { class: 'button button--secondary', type: 'button', onclick: closeEditSheet }, 'Cancel')));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError(form, '');
+    const problem = fields.validate();
+    if (problem) { showError(form, problem); return; }
+    submit.disabled = true;
+    submit.textContent = 'Sending…';
+    try {
+      await fields.send();
+      state.accessError = null;
+      closeEditSheet();
+      await loadAccessBanner();
+    } catch (err) {
+      showError(form, err.message);
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Send for checking';
+    }
+  });
+  openEditSheet('Request staff access', form);
 }
 
 /* ---------- Dashboard ------------------------------------------------------------- */
@@ -268,7 +407,7 @@ async function refreshAfterChange() {
 }
 
 async function loadDashboard() {
-  const [mine, notes] = await Promise.all([api('/bookings/mine'), api('/notifications')]);
+  const [mine, notes] = await Promise.all([api('/bookings/mine'), api('/notifications'), loadAccessBanner()]);
   renderNext(mine.bookings);
   renderUpcoming(mine.bookings);
   renderNotes(notes);
@@ -334,6 +473,7 @@ async function refreshPendingBadge() {
 
 function leaveApp() {
   state.user = null;
+  state.accessError = null;
   document.body.classList.replace('is-app', 'is-landing');
   $('[data-view="landing"]').hidden = false;
   for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = true;
@@ -355,7 +495,10 @@ function init() {
   setInterval(refreshNow, 60_000);
 
   $('[data-form="login"]').addEventListener('submit', (e) => { e.preventDefault(); submitAuth(e.target, '/auth/login'); });
-  $('[data-form="register"]').addEventListener('submit', (e) => { e.preventDefault(); submitAuth(e.target, '/auth/register'); });
+  $('[data-form="register"]').addEventListener('submit', (e) => { e.preventDefault(); submitRegister(e.target); });
+  registerStaff = staffFields();
+  $('[data-staff-slot]').replaceChildren(registerStaff.el);
+  for (const r of $$('[data-form="register"] input[name="accountType"]')) r.addEventListener('change', onAccountTypeChange);
   for (const b of $$('[data-switch]')) b.addEventListener('click', () => switchForm(b.dataset.switch));
   window.addEventListener('hashchange', () => { route(); });
   $('[data-form="find"]').addEventListener('submit', (e) => { e.preventDefault(); findRooms(e.target); });

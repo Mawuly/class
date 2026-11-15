@@ -57,11 +57,27 @@
         </label>
         <p class="alert" data-error hidden></p>
         <button class="button button--primary" type="submit">Sign in</button>
-        <p class="auth__switch">New here? <button class="link-button" type="button" data-switch="register">Create a student account</button></p>
+        <p class="auth__switch">New here? <button class="link-button" type="button" data-switch="register">Create an account</button></p>
+        <p class="auth__staff">Lecturers and timetable office staff register too, and attach their offer or appointment letter for checking.</p>
       </form>
 
       <form class="form" data-form="register" novalidate hidden>
-        <h1 class="serif auth__title">Create a student account</h1>
+        <h1 class="serif auth__title">Create an account</h1>
+        <fieldset class="account-type">
+          <legend class="field__label">I am</legend>
+          <label class="account-type__option">
+            <input type="radio" name="accountType" value="student" checked>
+            <span><b>A student</b><small>Request study, seminar and meeting rooms</small></span>
+          </label>
+          <label class="account-type__option">
+            <input type="radio" name="accountType" value="lecturer">
+            <span><b>A lecturer</b><small>Book lecture halls and labs. Needs your offer or appointment letter</small></span>
+          </label>
+          <label class="account-type__option">
+            <input type="radio" name="accountType" value="admin">
+            <span><b>Timetable office</b><small>Admin: approve requests, manage rooms and people. Needs your offer or appointment letter</small></span>
+          </label>
+        </fieldset>
         <label class="field">
           <span class="field__label">Full name</span>
           <input name="name" autocomplete="name" required minlength="2" maxlength="80">
@@ -70,7 +86,7 @@
           <span class="field__label">University email</span>
           <input name="email" type="email" autocomplete="email" required>
         </label>
-        <div class="field-row">
+        <div class="field-row" data-student-only>
           <label class="field">
             <span class="field__label">Index number <em>optional</em></span>
             <input name="indexNumber" class="mono" maxlength="30">
@@ -80,13 +96,14 @@
             <input name="department" maxlength="80">
           </label>
         </div>
+        <div data-staff-slot hidden></div>
         <label class="field">
           <span class="field__label">Password</span>
           <input name="password" type="password" autocomplete="new-password" required minlength="8">
           <span class="field__hint">8 or more characters, with a letter and a number</span>
         </label>
         <p class="alert" data-error hidden></p>
-        <button class="button button--primary" type="submit">Create account</button>
+        <button class="button button--primary" type="submit" data-register-submit>Create account</button>
         <p class="auth__switch">Already registered? <button class="link-button" type="button" data-switch="login">Sign in</button></p>
       </form>
     </section>
@@ -97,6 +114,7 @@
     <div class="dash__head">
       <h1 class="serif dash__greeting" data-greeting></h1>
       <p class="mono dash__date" data-today></p>
+      <section class="access-banner" data-access-banner hidden aria-live="polite"></section>
     </div>
 
     <section class="panel glass dash__next" aria-labelledby="next-title">
@@ -171,7 +189,8 @@
         <p class="mono queue-bar__summary" data-queue-summary></p>
       </div>
       <div class="tabs" role="tablist" aria-label="Requests">
-        <button class="tab" type="button" role="tab" data-queue-tab="pending" aria-selected="true">Waiting <span class="mono" data-tab-count></span></button>
+        <button class="tab" type="button" role="tab" data-queue-tab="pending" aria-selected="true">Rooms <span class="mono" data-tab-count></span></button>
+        <button class="tab" type="button" role="tab" data-queue-tab="access" aria-selected="false">Staff access <span class="mono" data-tab-count-access></span></button>
         <button class="tab" type="button" role="tab" data-queue-tab="decided" aria-selected="false">Decided</button>
       </div>
       <p class="queue-keys mono" aria-hidden="true"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
