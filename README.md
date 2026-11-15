@@ -11,7 +11,7 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
 - Clash detection that names the conflicting booking and suggests the nearest free slot of the same length
 - **Database-level double-booking protection:** two Postgres exclusion constraints stop overlapping pending or approved bookings, in one room or for one person, even if requests arrive at the same moment
 - Free-room finder (smallest suitable room first), day board and room week API
-- Admin approval queue with approve and reject, in-app notifications, audit log
+- Admin approval API with approve and reject, in-app notifications, audit log
 - "Campus Now" landing page with live room counts and ticker, sign-in and register, and a first dashboard
 - Booking sheet: book or request a room from the search results; clashes are shown inline with a one-click
   "Try 10:00–12:00?" suggestion; bookings can be cancelled from the dashboard
@@ -19,6 +19,10 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
 - Day board: every room against the hours of one day, with a live current-time line. Click an empty
   slot to book it, drag for longer, or use the keyboard; staff-only rooms are locked for students;
   past time is dimmed; filter by building and step through days
+
+- Approval queue for admins (Approvals in the top bar, with a count of requests waiting): reads like
+  an inbox, most urgent first; shows who is asking, the room that day and their history; A approves,
+  R rejects with an optional reason (quick reasons offered); a Decided tab lists recent decisions
 
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 

@@ -28,6 +28,7 @@
     <nav class="topbar__nav" data-signed-in hidden aria-label="Main">
       <a class="topbar__link" href="#/" data-nav="dashboard">Dashboard</a>
       <a class="topbar__link" href="#/board" data-nav="board">Day board</a>
+      <a class="topbar__link" href="#/approvals" data-nav="approvals" data-admin-only hidden>Approvals <span class="count mono" data-pending-badge hidden></span></a>
       <span class="topbar__who" data-user-name></span>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -158,6 +159,27 @@
     <div class="board" data-board></div>
     <p class="board-hint" data-board-hint>Click an empty slot to book it, or drag across slots for longer. With the keyboard: Tab to a room, arrow keys to pick a time, Enter to book.</p>
     <p class="visually-hidden" aria-live="polite" data-board-live></p>
+  </main>
+
+  <!-- Approval queue (admins): reads like an inbox ----------------------------------- -->
+  <main class="queue-view" data-view="approvals" hidden>
+    <div class="queue-bar">
+      <div>
+        <h1 class="serif queue-bar__title">Approvals</h1>
+        <p class="mono queue-bar__summary" data-queue-summary></p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Requests">
+        <button class="tab" type="button" role="tab" data-queue-tab="pending" aria-selected="true">Waiting <span class="mono" data-tab-count></span></button>
+        <button class="tab" type="button" role="tab" data-queue-tab="decided" aria-selected="false">Decided</button>
+      </div>
+      <p class="queue-keys mono" aria-hidden="true"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="queue" data-queue>
+      <ol class="queue__list" data-queue-list role="listbox" aria-label="Requests waiting for a decision" tabindex="0"></ol>
+      <section class="queue__detail" data-queue-detail aria-label="Selected request"></section>
+    </div>
+    <p class="visually-hidden" aria-live="polite" data-queue-live></p>
   </main>
 
   <!-- Booking sheet: slides in from the right over the dimmed page ------------------- -->

@@ -190,13 +190,54 @@ async function cancel(user, id, { ip } = {}) {
   return getBooking(id);
 }
 
+const REQUESTER_COLUMNS = `u.name AS user_name, u.email AS user_email, u.role AS user_role,
+  u.department AS user_department, u.index_number AS user_index_number, r.capacity AS room_capacity`;
+
+function hasEnded(b, now = new Date()) {
+  const today = t.localDate(now);
+  return b.date < today || (b.date === today && b.end_time <= t.localTime(now));
+}
+
+/** The approval queue: oldest-first by when the room is needed, so urgent requests are on top. */
 async function listByStatus(status = 'pending') {
-  return db.all(
-    `SELECT ${BOOKING_COLUMNS}, u.name AS user_name, u.email AS user_email, u.role AS user_role
+  const rows = await db.all(
+    `SELECT ${BOOKING_COLUMNS}, ${REQUESTER_COLUMNS}
      FROM ${BOOKING_FROM} JOIN users u ON u.id = b.user_id
      WHERE b.status = ? ORDER BY b.date, b.start_time LIMIT 500`,
     [status],
   );
+  return rows.map((b) => ({ ...b, ended: hasEnded(b) }));
+}
+
+/** Recent approvals and rejections, newest first, with who decided. */
+async function listDecided(limit = 100) {
+  return db.all(
+    `SELECT ${BOOKING_COLUMNS}, ${REQUESTER_COLUMNS}, d.name AS decided_by_name, b.updated_at AS decided_at
+     FROM ${BOOKING_FROM} JOIN users u ON u.id = b.user_id JOIN users d ON d.id = b.decided_by
+     WHERE b.status IN ('approved', 'rejected') ORDER BY b.updated_at DESC LIMIT ?`,
+    [limit],
+  );
+}
+
+/** What an admin needs to judge one request: the room's other bookings that day, the requester's other requests. */
+async function requestContext(id) {
+  const b = await getBooking(id);
+  if (!b) throw new AppError(404, 'Booking not found');
+  const sameRoom = await db.all(
+    `SELECT id, title, course_code, start_time, end_time, status FROM bookings
+     WHERE room_id = ? AND date = ? AND id <> ? AND status IN ${HOLDING} ORDER BY start_time`,
+    [b.room_id, b.date, id],
+  );
+  const { pending } = await db.get(
+    "SELECT count(*)::int AS pending FROM bookings WHERE user_id = ? AND status = 'pending' AND id <> ?",
+    [b.user_id, id],
+  );
+  const { decided, rejected } = await db.get(
+    `SELECT count(*)::int AS decided, count(*) FILTER (WHERE status = 'rejected')::int AS rejected
+     FROM bookings WHERE user_id = ? AND decided_by IS NOT NULL`,
+    [b.user_id],
+  );
+  return { sameRoom, requester: { otherPending: pending, decided, rejected } };
 }
 
 async function decide(admin, id, decision, reason, { ip } = {}) {
@@ -205,6 +246,9 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
   const b = await getBooking(id);
   if (!b) throw new AppError(404, 'Booking not found');
   if (b.status !== 'pending') throw new AppError(409, `This booking is already ${b.status}`);
+  if (decision === 'approved' && hasEnded(b)) {
+    throw new AppError(409, 'The time for this request has already passed, so it can only be rejected');
+  }
 
   await db.tx(async (x) => {
     const { changes } = await x.run(
@@ -220,4 +264,7 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
   return getBooking(id);
 }
 
-module.exports = { CATEGORIES, STUDENT_CATEGORIES, create, listMine, cancel, listByStatus, decide, getBooking, suggestSlot };
+module.exports = {
+  CATEGORIES, STUDENT_CATEGORIES, create, listMine, cancel, listByStatus, listDecided, requestContext,
+  decide, getBooking, suggestSlot,
+};

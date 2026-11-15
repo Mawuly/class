@@ -10,10 +10,16 @@ router.use(requireRole('admin'));
 
 const STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
 
+// ?status=pending (the queue), approved / rejected / cancelled, or "decided" (recent decisions).
 router.get('/bookings', async (req, res) => {
   const status = req.query.status || 'pending';
+  if (status === 'decided') return res.json({ bookings: await bookings.listDecided() });
   if (!STATUSES.includes(status)) throw new AppError(400, 'Unknown status');
   res.json({ bookings: await bookings.listByStatus(status) });
+});
+
+router.get('/bookings/:id/context', async (req, res) => {
+  res.json(await bookings.requestContext(parseId(req.params.id, 'Booking')));
 });
 
 router.post('/bookings/:id/approve', async (req, res) => {

@@ -2,6 +2,7 @@
 const { test, before, beforeEach, after, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { db, agent, signedIn, resetDb, roomId, tomorrow, PASSWORD } = require('./helpers');
+const { localDate, addDays } = require('../src/utils/time');
 
 before(resetDb);
 after(() => db.pool.end());
@@ -317,5 +318,72 @@ describe('connection strings', () => {
     const clean = cleanDatabaseUrl(url);
     assert.equal(clean, 'postgres://postgres.abc:p%40ss%23w0rd@aws-0-eu-central-1.pooler.supabase.com:6543/postgres');
     assert.equal(cleanDatabaseUrl('postgres://u:p@h:5432/db?pgbouncer=true'), 'postgres://u:p@h:5432/db');
+  });
+});
+
+describe('approval queue', () => {
+  let student; let admin; let lecturer;
+  const date = tomorrow();
+
+  beforeEach(async () => {
+    await resetDb();
+    student = await signedIn('kwame@campus.test');
+    admin = await signedIn('registry@campus.test', 'admin');
+    lecturer = await signedIn('mensah@campus.test', 'lecturer');
+    await db.run("UPDATE users SET department = 'Computer Science', index_number = '10912345' WHERE email = 'kwame@campus.test'");
+  });
+
+  const request = async (code, start, end) => student.post('/api/bookings').send({
+    roomId: await roomId(code), title: 'Group revision', category: 'study', date, start, end, attendees: 4,
+  });
+
+  test('the queue shows who is asking, their department and the room size', async () => {
+    await request('LIB-S1', '10:00', '12:00');
+    const { body } = await admin.get('/api/admin/bookings?status=pending');
+    const b = body.bookings[0];
+    assert.equal(b.user_name, 'kwame');
+    assert.equal(b.user_department, 'Computer Science');
+    assert.equal(b.user_index_number, '10912345');
+    assert.equal(b.room_capacity, 6);
+    assert.equal(b.ended, false);
+  });
+
+  test('context lists the room\'s other bookings that day and the requester\'s history', async () => {
+    const req = await request('LIB-S3', '10:00', '12:00');
+    await lecturer.post('/api/bookings').send({
+      roomId: await roomId('LIB-S3'), title: 'Seminar', category: 'tutorial', date, start: '13:00', end: '14:00', attendees: 10,
+    });
+    await request('LIB-S1', '14:00', '15:00');
+    const { body } = await admin.get(`/api/admin/bookings/${req.body.booking.id}/context`);
+    assert.deepEqual(body.sameRoom.map((x) => x.title), ['Seminar']);
+    assert.equal(body.requester.otherPending, 1);
+    assert.equal((await student.get(`/api/admin/bookings/${req.body.booking.id}/context`)).status, 403);
+  });
+
+  test('decided tab lists recent decisions with who decided and why', async () => {
+    const a = await request('LIB-S1', '10:00', '11:00');
+    const r = await request('LIB-S2', '12:00', '13:00');
+    await admin.post(`/api/admin/bookings/${a.body.booking.id}/approve`);
+    await admin.post(`/api/admin/bookings/${r.body.booking.id}/reject`).send({ reason: 'Reserved for exams' });
+    const { body } = await admin.get('/api/admin/bookings?status=decided');
+    assert.deepEqual(body.bookings.map((x) => x.status).sort(), ['approved', 'rejected']);
+    const rejected = body.bookings.find((x) => x.status === 'rejected');
+    assert.equal(rejected.decided_by_name, 'registry');
+    assert.equal(rejected.decision_reason, 'Reserved for exams');
+  });
+
+  test('a request whose time has passed can be rejected but not approved', async () => {
+    const yesterday = addDays(localDate(), -1);
+    const { id } = await db.get(
+      `INSERT INTO bookings (room_id, user_id, title, category, date, start_time, end_time, attendees, status)
+       VALUES (?, ?, 'Old request', 'study', ?, '10:00', '11:00', 2, 'pending') RETURNING id`,
+      [await roomId('LIB-S1'), student.user.id, yesterday],
+    );
+    const queue = await admin.get('/api/admin/bookings?status=pending');
+    assert.equal(queue.body.bookings.find((x) => x.id === id).ended, true);
+    const approve = await admin.post(`/api/admin/bookings/${id}/approve`);
+    assert.equal(approve.status, 409);
+    assert.match(approve.body.error, /already passed/);
+    assert.equal((await admin.post(`/api/admin/bookings/${id}/reject`)).status, 200);
   });
 });

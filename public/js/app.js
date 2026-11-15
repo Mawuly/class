@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { openSheet } from './sheet.js';
 import { showBoard, hideBoard } from './board.js';
+import { showApprovals, pendingCount } from './approvals.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -285,31 +286,53 @@ async function enterApp(user) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
   fillStartOptions();
+  const isAdmin = user.role === 'admin';
+  for (const el of $$('[data-admin-only]')) el.hidden = !isAdmin;
+  clearInterval(state.badgeTimer);
+  if (isAdmin) {
+    refreshPendingBadge();
+    state.badgeTimer = setInterval(refreshPendingBadge, 60_000);
+  }
   await route();
 }
 
-/** Signed-in pages: "#/" is the dashboard, "#/board" the day board. */
+const PAGES = { '#/board': 'board', '#/approvals': 'approvals' };
+const APP_VIEWS = ['dashboard', 'board', 'approvals'];
+
+/** Signed-in pages: "#/" dashboard, "#/board" day board, "#/approvals" approval queue (admins). */
 async function route() {
   if (!state.user) return;
-  const page = location.hash === '#/board' ? 'board' : 'dashboard';
-  $('[data-view="dashboard"]').hidden = page !== 'dashboard';
-  $('[data-view="board"]').hidden = page !== 'board';
-  document.body.classList.toggle('is-board', page === 'board');
+  let page = PAGES[location.hash] || 'dashboard';
+  if (page === 'approvals' && state.user.role !== 'admin') page = 'dashboard';
+  for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = v !== page;
+  // Data-heavy pages keep the top bar fixed as glass over the scrolling page.
+  document.body.classList.toggle('is-board', page !== 'dashboard');
   for (const a of $$('[data-nav]')) a.toggleAttribute('aria-current', a.dataset.nav === page);
-  if (page === 'board') {
-    showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
-  } else {
-    hideBoard();
-    await loadDashboard();
-  }
+  if (page === 'board') showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
+  else hideBoard();
+  if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
+  if (page === 'dashboard') await loadDashboard();
+}
+
+function setPendingBadge(n) {
+  const badge = $('[data-pending-badge]');
+  badge.textContent = n > 99 ? '99+' : String(n);
+  badge.hidden = !n;
+  $('[data-nav="approvals"]').setAttribute('aria-label', n ? `Approvals, ${n} waiting` : 'Approvals');
+}
+
+async function refreshPendingBadge() {
+  if (state.user?.role !== 'admin') return;
+  try { setPendingBadge(await pendingCount()); } catch { /* keep the last count */ }
 }
 
 function leaveApp() {
   state.user = null;
   document.body.classList.replace('is-app', 'is-landing');
   $('[data-view="landing"]').hidden = false;
-  $('[data-view="dashboard"]').hidden = true;
-  $('[data-view="board"]').hidden = true;
+  for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = true;
+  for (const el of $$('[data-admin-only]')) el.hidden = true;
+  clearInterval(state.badgeTimer);
   $('[data-signed-in]').hidden = true;
   document.body.classList.remove('is-board');
   hideBoard();
