@@ -23,7 +23,7 @@ async function resetDb() {
 function agent() {
   const a = request.agent(app);
   const wrap = (method) => (url) => a[method](url).set('X-Requested-With', 'XMLHttpRequest');
-  return { get: wrap('get'), post: wrap('post'), patch: wrap('patch'), raw: a };
+  return { get: wrap('get'), post: wrap('post'), patch: wrap('patch'), delete: wrap('delete'), raw: a };
 }
 
 /** Registers a user, optionally promotes them, and returns a signed-in agent. */

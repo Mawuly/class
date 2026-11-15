@@ -2,6 +2,7 @@ import { api } from './api.js';
 import { openSheet } from './sheet.js';
 import { showBoard, hideBoard } from './board.js';
 import { showApprovals, pendingCount } from './approvals.js';
+import { showRooms } from './rooms-admin.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -296,14 +297,15 @@ async function enterApp(user) {
   await route();
 }
 
-const PAGES = { '#/board': 'board', '#/approvals': 'approvals' };
-const APP_VIEWS = ['dashboard', 'board', 'approvals'];
+const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms' };
+const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms'];
+const ADMIN_PAGES = ['approvals', 'rooms'];
 
-/** Signed-in pages: "#/" dashboard, "#/board" day board, "#/approvals" approval queue (admins). */
+/** Signed-in pages: "#/" dashboard, "#/board" day board; admins also "#/approvals" and "#/rooms". */
 async function route() {
   if (!state.user) return;
   let page = PAGES[location.hash] || 'dashboard';
-  if (page === 'approvals' && state.user.role !== 'admin') page = 'dashboard';
+  if (ADMIN_PAGES.includes(page) && state.user.role !== 'admin') page = 'dashboard';
   for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = v !== page;
   // Data-heavy pages keep the top bar fixed as glass over the scrolling page.
   document.body.classList.toggle('is-board', page !== 'dashboard');
@@ -311,6 +313,8 @@ async function route() {
   if (page === 'board') showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
   else hideBoard();
   if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
+  // After a room edit, refresh the cached building and facility lists used by the board and search.
+  if (page === 'rooms') showRooms({ onChange: async () => { state.meta = await api('/rooms/meta'); } });
   if (page === 'dashboard') await loadDashboard();
 }
 

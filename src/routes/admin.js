@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const bookings = require('../services/bookings');
+const roomAdmin = require('../services/roomAdmin');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
@@ -32,6 +33,32 @@ router.post('/bookings/:id/reject', async (req, res) => {
   res.json({ booking });
 });
 
-// Room and building management, users, stats and the audit log come in weeks 6–9.
+/* ---------- Buildings and rooms ---------------------------------------------------- */
+
+router.get('/rooms', async (req, res) => res.json(await roomAdmin.overview()));
+
+router.post('/buildings', async (req, res) => {
+  res.status(201).json({ building: await roomAdmin.createBuilding(req.user, req.body ?? {}, { ip: req.ip }) });
+});
+router.patch('/buildings/:id', async (req, res) => {
+  res.json({ building: await roomAdmin.updateBuilding(req.user, parseId(req.params.id, 'Building'), req.body ?? {}, { ip: req.ip }) });
+});
+router.delete('/buildings/:id', async (req, res) => {
+  await roomAdmin.deleteBuilding(req.user, parseId(req.params.id, 'Building'), { ip: req.ip });
+  res.json({ ok: true });
+});
+
+router.post('/rooms', async (req, res) => {
+  res.status(201).json({ room: await roomAdmin.createRoom(req.user, req.body ?? {}, { ip: req.ip }) });
+});
+router.patch('/rooms/:id', async (req, res) => {
+  res.json(await roomAdmin.updateRoom(req.user, parseId(req.params.id, 'Room'), req.body ?? {}, { ip: req.ip }));
+});
+router.delete('/rooms/:id', async (req, res) => {
+  await roomAdmin.deleteRoom(req.user, parseId(req.params.id, 'Room'), { ip: req.ip });
+  res.json({ ok: true });
+});
+
+// Users, stats and the audit log come next.
 
 module.exports = router;

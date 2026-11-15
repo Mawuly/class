@@ -29,6 +29,7 @@
       <a class="topbar__link" href="#/" data-nav="dashboard">Dashboard</a>
       <a class="topbar__link" href="#/board" data-nav="board">Day board</a>
       <a class="topbar__link" href="#/approvals" data-nav="approvals" data-admin-only hidden>Approvals <span class="count mono" data-pending-badge hidden></span></a>
+      <a class="topbar__link" href="#/rooms" data-nav="rooms" data-admin-only hidden>Rooms</a>
       <span class="topbar__who" data-user-name></span>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -181,6 +182,38 @@
     </div>
     <p class="visually-hidden" aria-live="polite" data-queue-live></p>
   </main>
+
+  <!-- Room management (admins) -------------------------------------------------------- -->
+  <main class="rooms-view" data-view="rooms" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Rooms</h1>
+        <p class="mono page-bar__summary" data-rooms-summary></p>
+      </div>
+      <div class="rooms-filters">
+        <input type="search" placeholder="Search code or name" data-rooms-search aria-label="Search rooms">
+        <select data-rooms-building aria-label="Building"></select>
+        <label class="check"><input type="checkbox" data-rooms-inactive> Show inactive</label>
+      </div>
+      <div class="page-bar__actions">
+        <button class="button button--secondary" type="button" data-add-building>+ Building</button>
+        <button class="button button--primary" type="button" data-add-room>+ Room</button>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="rooms-table" data-rooms-table></div>
+  </main>
+
+  <!-- Room / building editor: same sliding glass sheet as booking -------------------- -->
+  <dialog class="sheet" data-edit-sheet aria-labelledby="edit-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="edit-title" data-edit-title>Edit</h2>
+        <button class="link-button sheet__close" type="button" data-edit-close>Close</button>
+      </header>
+      <div data-edit-body></div>
+    </div>
+  </dialog>
 
   <!-- Booking sheet: slides in from the right over the dimmed page ------------------- -->
   <dialog class="sheet" data-sheet aria-labelledby="sheet-title">

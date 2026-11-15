@@ -24,6 +24,10 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   an inbox, most urgent first; shows who is asking, the room that day and their history; A approves,
   R rejects with an optional reason (quick reasons offered); a Decided tab lists recent decisions
 
+- Room management for admins (Rooms in the top bar): add, edit and search buildings and rooms; set
+  seats, type, facilities and who can book; deactivate a room (its upcoming bookings are cancelled and
+  the people who booked are told, after a confirmation); delete rooms that were never booked
+
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally
@@ -90,8 +94,9 @@ Optional settings (Vercel → Settings → Environment Variables):
 | `ALLOWED_EMAIL_DOMAIN` | e.g. `ug.edu.gh`: only addresses at that domain can register. |
 | `JWT_SECRET` | A long random string for signing logins. Optional: without it, one is derived from the database connection string. |
 
-To change the rooms to your campus's real ones, edit the lists at the top of `src/db/seed.js`
-(you can do that on github.com) **before** the first deploy, or later in Supabase's Table Editor.
+To use your campus's real rooms, sign in as admin and open **Rooms**: add your buildings and rooms,
+and delete the demo ones (any demo room that was never booked can be deleted; booked ones can be
+deactivated).
 
 ### If the deployed site shows an error
 

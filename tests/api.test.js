@@ -387,3 +387,115 @@ describe('approval queue', () => {
     assert.equal((await admin.post(`/api/admin/bookings/${id}/reject`)).status, 200);
   });
 });
+
+describe('room management', () => {
+  let admin; let lecturer; let student;
+  const date = tomorrow();
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('ops@campus.test', 'admin');
+    lecturer = await signedIn('ofori@campus.test', 'lecturer');
+    student = await signedIn('esi@campus.test');
+  });
+
+  const buildingId = async (code) => (await db.get('SELECT id FROM buildings WHERE code = ?', [code])).id;
+
+  test('only admins can manage rooms', async () => {
+    assert.equal((await lecturer.get('/api/admin/rooms')).status, 403);
+    assert.equal((await student.post('/api/admin/rooms').send({})).status, 403);
+  });
+
+  test('overview lists buildings and rooms with usage counts', async () => {
+    await lecturer.post('/api/bookings').send({ roomId: await roomId('LT-3'), title: 'X', category: 'lecture', date, start: '08:00', end: '09:00', attendees: 50 });
+    const { body } = await admin.get('/api/admin/rooms');
+    assert.equal(body.buildings.length, 4);
+    assert.equal(body.rooms.length, 16);
+    const lt3 = body.rooms.find((r) => r.code === 'LT-3');
+    assert.equal(lt3.upcoming, 1);
+    assert.equal(lt3.total_bookings, 1);
+  });
+
+  test('add a building and a room; codes are upper-cased and facilities normalised', async () => {
+    const b = await admin.post('/api/admin/buildings').send({ code: 'eng', name: 'Engineering Block' });
+    assert.equal(b.status, 201);
+    assert.equal(b.body.building.code, 'ENG');
+    const r = await admin.post('/api/admin/rooms').send({
+      buildingId: b.body.building.id, code: 'eng-101', name: 'Drawing Studio', type: 'lab', capacity: 40, floor: 1,
+      facilities: ['Projector', 'Video conf', 'projector'],
+    });
+    assert.equal(r.status, 201);
+    const room = await db.get('SELECT code, facilities, bookable_by FROM rooms WHERE id = ?', [r.body.room.id]);
+    assert.equal(room.code, 'ENG-101');
+    assert.deepEqual(room.facilities, ['projector', 'video_conf']);
+    assert.equal(room.bookable_by, 'staff'); // labs default to staff only
+    // It can be found and booked straight away
+    const found = await lecturer.get(`/api/rooms/available?date=${date}&start=10:00&end=11:00&minCapacity=35&type=lab`);
+    assert.ok(found.body.rooms.some((x) => x.code === 'ENG-101'));
+  });
+
+  test('duplicate codes and bad input are refused clearly', async () => {
+    const dup = await admin.post('/api/admin/rooms').send({ buildingId: await buildingId('LTB'), code: 'lt-1', name: 'Copy', type: 'seminar', capacity: 10 });
+    assert.equal(dup.status, 409);
+    assert.match(dup.body.error, /already a room with the code LT-1/);
+    const bad = await admin.post('/api/admin/rooms').send({ buildingId: await buildingId('LTB'), code: 'LT 9', name: 'X', type: 'seminar', capacity: 10 });
+    assert.equal(bad.status, 400);
+    const seats = await admin.post('/api/admin/rooms').send({ buildingId: await buildingId('LTB'), code: 'LT-9', name: 'Hall', type: 'seminar', capacity: 0 });
+    assert.equal(seats.status, 400);
+  });
+
+  test('edit a room: new capacity and who can book it', async () => {
+    const id = await roomId('SCB-105');
+    const res = await admin.patch(`/api/admin/rooms/${id}`).send({ capacity: 24, bookableBy: 'staff' });
+    assert.equal(res.status, 200);
+    const req = await student.post('/api/bookings').send({ roomId: id, title: 'Study', category: 'study', date, start: '10:00', end: '11:00', attendees: 4 });
+    assert.equal(req.status, 403);
+  });
+
+  test('deactivating a room with upcoming bookings asks first, then cancels and notifies', async () => {
+    const id = await roomId('SCB-104');
+    await student.post('/api/bookings').send({ roomId: id, title: 'Group work', category: 'meeting', date, start: '10:00', end: '11:00', attendees: 5 });
+    const ask = await admin.patch(`/api/admin/rooms/${id}`).send({ isActive: false });
+    assert.equal(ask.status, 409);
+    assert.equal(ask.body.upcoming, 1);
+    assert.equal(ask.body.needsConfirm, true);
+    assert.equal((await db.get('SELECT is_active FROM rooms WHERE id = ?', [id])).is_active, true);
+
+    const ok = await admin.patch(`/api/admin/rooms/${id}`).send({ isActive: false, cancelUpcoming: true });
+    assert.equal(ok.body.cancelled, 1);
+    const notes = await student.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /SCB-104 .* cancelled because the room is no longer available/);
+    // Gone from searches and the board, still in the admin list
+    const found = await lecturer.get(`/api/rooms/available?date=${date}&start=12:00&end=13:00`);
+    assert.ok(!found.body.rooms.some((x) => x.code === 'SCB-104'));
+    const board = await lecturer.get(`/api/rooms/schedule/day?date=${date}`);
+    assert.ok(!board.body.rooms.some((x) => x.code === 'SCB-104'));
+    assert.equal((await admin.get('/api/admin/rooms')).body.rooms.find((x) => x.code === 'SCB-104').is_active, false);
+    // And back again
+    await admin.patch(`/api/admin/rooms/${id}`).send({ isActive: true });
+    assert.equal((await db.get('SELECT is_active FROM rooms WHERE id = ?', [id])).is_active, true);
+  });
+
+  test('a never-booked room can be deleted; a booked one must be deactivated instead', async () => {
+    const unused = await roomId('NAB-206');
+    assert.equal((await admin.delete(`/api/admin/rooms/${unused}`)).status, 200);
+    const used = await roomId('LT-2');
+    await lecturer.post('/api/bookings').send({ roomId: used, title: 'X', category: 'lecture', date, start: '08:00', end: '09:00', attendees: 50 });
+    const refused = await admin.delete(`/api/admin/rooms/${used}`);
+    assert.equal(refused.status, 409);
+    assert.match(refused.body.error, /Deactivate it instead/);
+  });
+
+  test('a building can only be deleted once it is empty', async () => {
+    const lib = await buildingId('LIB');
+    assert.equal((await admin.delete(`/api/admin/buildings/${lib}`)).status, 409);
+    for (const code of ['LIB-S1', 'LIB-S2', 'LIB-S3', 'LIB-G1']) await admin.delete(`/api/admin/rooms/${await roomId(code)}`);
+    assert.equal((await admin.delete(`/api/admin/buildings/${lib}`)).status, 200);
+  });
+
+  test('room changes are written to the audit log', async () => {
+    await admin.patch(`/api/admin/rooms/${await roomId('LT-3')}`).send({ name: 'Lecture Theatre Three' });
+    const row = await db.get("SELECT action, details FROM audit_log WHERE action = 'room.update'");
+    assert.equal(row.details.name, 'Lecture Theatre Three');
+  });
+});
