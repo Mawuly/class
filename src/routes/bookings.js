@@ -48,4 +48,9 @@ router.post('/:id/cancel', async (req, res) => {
   res.json({ booking });
 });
 
+router.post('/:id/check-out', async (req, res) => {
+  const booking = await bookings.checkOut(req.user, parseId(req.params.id, 'Booking'), { ip: req.ip });
+  res.json({ booking });
+});
+
 module.exports = router;

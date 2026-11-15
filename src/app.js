@@ -9,6 +9,7 @@ const { requireXhr } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { AppError } = require('./utils/errors');
 const { ensureReady } = require('./db/setup');
+const settings = require('./services/settings');
 const { releaseIfDue } = require('./services/checkin');
 const { loadIfStale: loadSettingsIfStale } = require('./services/settings');
 
@@ -52,6 +53,7 @@ api.use((req, res, next) => {
 // First request on a fresh database creates the tables and rooms (see db/setup.js).
 api.use(async (req, res, next) => {
   await ensureReady();
+  await settings.load();
   next();
 });
 api.use(requireXhr);

@@ -53,6 +53,26 @@ CREATE TABLE IF NOT EXISTS rooms (
   is_active   boolean NOT NULL DEFAULT true
 );
 
+-- Time-limited closures set by the timetable office: maintenance, examinations, cleaning,
+-- or a venue reserved outside the ordinary booking process. A room is "available" only when
+-- it is active, has no holding booking, and has no overlapping room block.
+CREATE TABLE IF NOT EXISTS room_blocks (
+  id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  room_id    integer     NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  date       date        NOT NULL,
+  start_time time        NOT NULL,
+  end_time   time        NOT NULL,
+  reason     text        NOT NULL CHECK (length(trim(reason)) BETWEEN 3 AND 300),
+  created_by integer     NOT NULL REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (start_time < end_time),
+  CONSTRAINT room_blocks_no_overlap EXCLUDE USING gist (
+    room_id WITH =,
+    tsrange(date + start_time, date + end_time) WITH &&
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_room_blocks_room_date ON room_blocks (room_id, date);
+
 -- One row per weekly recurring booking; each occurrence lives in bookings with this series_id.
 CREATE TABLE IF NOT EXISTS booking_series (
   id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -73,6 +93,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   title           text        NOT NULL,
   category        text        NOT NULL CHECK (category IN ('lecture', 'tutorial', 'lab', 'exam', 'meeting', 'study', 'event')),
   course_code     text,
+  supervisor      text,
   date            date        NOT NULL,
   start_time      time        NOT NULL,
   end_time        time        NOT NULL,
@@ -104,6 +125,47 @@ CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings (room_id, date);
 CREATE INDEX IF NOT EXISTS idx_bookings_user_date ON bookings (user_id, date);
 CREATE INDEX IF NOT EXISTS idx_bookings_status    ON bookings (status);
 CREATE INDEX IF NOT EXISTS idx_bookings_series    ON bookings (series_id);
+
+-- A block and a holding booking may never overlap. Advisory locks make the cross-table checks
+-- safe even when an admin creates a block at the same instant somebody submits a booking.
+CREATE OR REPLACE FUNCTION lock_room_for_schedule() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  PERFORM pg_advisory_xact_lock(NEW.room_id);
+  RETURN NEW;
+END;
+$fn$;
+DROP TRIGGER IF EXISTS room_blocks_lock_room ON room_blocks;
+CREATE TRIGGER room_blocks_lock_room BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time ON room_blocks
+  FOR EACH ROW EXECUTE FUNCTION lock_room_for_schedule();
+DROP TRIGGER IF EXISTS bookings_lock_room ON bookings;
+CREATE TRIGGER bookings_lock_room BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time, status ON bookings
+  FOR EACH ROW EXECUTE FUNCTION lock_room_for_schedule();
+
+CREATE OR REPLACE FUNCTION reject_blocked_booking() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.status IN ('pending', 'approved') AND EXISTS (
+    SELECT 1 FROM room_blocks rb WHERE rb.room_id = NEW.room_id AND rb.date = NEW.date
+      AND rb.start_time < NEW.end_time AND rb.end_time > NEW.start_time
+  ) THEN RAISE EXCEPTION 'Room is unavailable for this time' USING ERRCODE = '23P01'; END IF;
+  RETURN NEW;
+END;
+$fn$;
+DROP TRIGGER IF EXISTS bookings_reject_room_blocks ON bookings;
+CREATE TRIGGER bookings_reject_room_blocks BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time, status ON bookings
+  FOR EACH ROW EXECUTE FUNCTION reject_blocked_booking();
+
+CREATE OR REPLACE FUNCTION reject_booked_room_block() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM bookings b WHERE b.room_id = NEW.room_id AND b.date = NEW.date
+      AND b.status IN ('pending', 'approved') AND b.start_time < NEW.end_time AND b.end_time > NEW.start_time
+  ) THEN RAISE EXCEPTION 'Room already has a booking in this time' USING ERRCODE = '23P01'; END IF;
+  RETURN NEW;
+END;
+$fn$;
+DROP TRIGGER IF EXISTS room_blocks_reject_bookings ON room_blocks;
+CREATE TRIGGER room_blocks_reject_bookings BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time ON room_blocks
+  FOR EACH ROW EXECUTE FUNCTION reject_booked_room_block();
 
 CREATE TABLE IF NOT EXISTS notifications (
   id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -213,8 +275,11 @@ ALTER TABLE rooms ALTER COLUMN door_code SET DEFAULT new_door_code();
 ALTER TABLE rooms ALTER COLUMN door_code SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS rooms_door_code_key ON rooms (door_code);
 
-ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at timestamptz;
-ALTER TABLE bookings ADD COLUMN IF NOT EXISTS released_at   timestamptz;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at  timestamptz;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_out_at timestamptz;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS released_at    timestamptz;
+-- The person supervising a student activity, shown with the course code on a request.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS supervisor text;
 ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
 ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
   CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'released'));
@@ -302,6 +367,12 @@ CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,
   value text NOT NULL
 );
+-- The day's booking window, editable in the timetable office. Values are HH:MM in Africa/Accra.
+INSERT INTO app_meta (key, value) VALUES
+  ('booking_open', '06:30'),
+  ('booking_close', '20:30'),
+  ('booking_max_hours', '4')
+ON CONFLICT (key) DO NOTHING;
 -- The day check-in started, so statistics don't count older bookings as missed check-ins.
 INSERT INTO app_meta (key, value) VALUES ('checkin_since', to_char(current_date, 'YYYY-MM-DD')) ON CONFLICT (key) DO NOTHING;
 -- The booking window (schema version 10), edited on /admin -> Settings. Applies to every room.
@@ -314,6 +385,7 @@ INSERT INTO app_meta (key, value) VALUES ('booking_open', '06:30'), ('booking_cl
 ALTER TABLE users          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE buildings      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rooms          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_blocks    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE booking_series ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications  ENABLE ROW LEVEL SECURITY;

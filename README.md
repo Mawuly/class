@@ -1,6 +1,6 @@
-# Lecture Room Booking System
+# UCC Room Finder
 
-Find a free lecture room, book it without clashes, and let the timetable office approve student requests.
+Find a free room at the University of Cape Coast, submit a booking without clashes, and let the timetable office approve student requests.
 Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Vercel.
 
 ## Features
@@ -15,12 +15,12 @@ Every feature in the project plan is built.
 - Rules: open 06:30–20:30 by default (set in `/admin` → **Settings**), start times every 30 minutes, bookings last whole hours up to the longest class (default 4 h), up to 150 days ahead, capacity; students request study, meeting and event bookings and wait for approval
 - Requests can carry a course code and a supervisor; after checking in you can **check out early**, which ends the booking now and frees the rest of the slot
 - Public room list `GET /api/public/rooms?date=`: every room's free periods, no booking details
-- Check-in at the door: every room has a printed sign with a QR code and a six-character door code. Scanning it opens the room's door page (`/door?c=CODE`): whether the room is free, in use or waiting for check-in, a one-tap **Check in**, and booking it from the next half hour. Without a camera, people type the code under **Check in** on their dashboard. Check-in opens 10 minutes before the start; an approved booking nobody checks in to within 15 minutes is released, the room becomes free, and the person is told why
+- Check-in at the door: every room has a printed sign with a QR code and a six-character door code. Scanning it opens the room's door page (`/door?c=CODE`): whether the room is free, in use or waiting for check-in, a one-tap **Check in**, and booking it from the next half hour. On the public site, **My bookings** asks for that same door code. Check-in opens 10 minutes before the start; an approved booking nobody checks in to within 15 minutes is released, the room becomes free, and the person is told why
 - Calendar export: an .ics file, or a private subscription link for Google Calendar, Outlook or Apple Calendar that stays up to date
 - "Campus Now" landing page with live room counts; dashboard with your next booking, Coming up and notifications
 
 **Timetable office portal (admins, at `/admin`)**
-- A separate page with its own sign-in and navigation; students and lecturers never see it. Admins reach it from the **Timetable office ↗** link on the main site, which shows how many requests are waiting
+- A separate page with its own sign-in and navigation; students and lecturers never see it. Admins reach it from the **Timetable office** link on the main site, which shows how many requests are waiting
 - Approvals inbox for room requests and staff access requests, with keyboard shortcuts (A / R) and reasons
 - Rooms and buildings: add, edit, deactivate (upcoming bookings cancelled and people told), delete if never booked (deleting a room with only past bookings deactivates it)
 - Temporary unavailability: close a room for a time on a date (maintenance, exams, events) with a reason; it disappears from search, shows hatched on the day board, week view and door page, and is bookable again afterwards. The database refuses a closure on a booking and a booking on a closure, even at the same instant
@@ -29,6 +29,7 @@ Every feature in the project plan is built.
 - Door signs: print one sign per room (or all at once) from Rooms → **Print door signs**; **New code** on a room replaces a lost or photographed sign
 - Statistics: utilisation, busiest hours, purposes, per-room use with plain-language notes; table views and CSV
 - Audit log: every action as a sentence, filters, a failed-sign-in warning, CSV export
+- Settings: the booking window (day opens, last class ends, longest class) for every room; changes apply to the public site immediately
 
 **Accounts and security**
 - Sign-up asks "I am a student" or "I am a lecturer". Lecturers attach their letter at sign-up; timetable office staff request access on the portal (`/admin` → Request access)
@@ -66,7 +67,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000. Demo accounts (password `Campus2026`): `admin@campus.test`, `lecturer@campus.test`, `student@campus.test`.
+Open http://localhost:3000. That page is the live client: find a room, request it, then check in, check out or cancel. `/preview.html` is a separate demo that keeps its data in the browser. `/admin` is the timetable office. Demo accounts (password `Campus2026`): `admin@campus.test`, `lecturer@campus.test`, `student@campus.test`.
 
 Locally the app connects to `postgres://postgres:postgres@localhost:5432/rooms_dev`. Set `DATABASE_URL` to change that.
 

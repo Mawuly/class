@@ -1,0 +1,101 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UCC Spaces · Interface preview</title>
+  <meta name="theme-color" content="#092b54">
+  <link rel="stylesheet" href="/css/spaces.css">
+  <script type="module" src="/js/preview.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="identity" href="/"><span class="crest">UCC</span><span>UCC Spaces<small>UNIVERSITY OF CAPE COAST</small></span></a>
+    <p class="nav-label">CAMPUS WORKSPACE</p>
+    <nav aria-label="Workspace">
+      <button class="nav-item selected" data-page="discover">â–¦ <span>Find a classroom</span></button>
+      <button class="nav-item" data-page="bookings">â–¤ <span>My bookings</span><b id="booking-count">0</b></button>
+      <button class="nav-item" data-page="admin">â—· <span>Timetable office</span></button>
+    </nav>
+    <div class="sidebar-bottom"><button class="text-button" id="reset-demo">Reset bookings</button></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span>Campus / <strong id="page-label">Find a classroom</strong></span><span class="campus-time">Cape Coast Â· GMT</span><div class="account-actions" id="account-actions"></div></header>
+    <main>
+      <section id="discover-page">
+        <div class="hero">
+          <img class="hero-bg" src="/media/ucc-large-theatre.jpg" alt="The Large Lecture Theatre at the University of Cape Coast" width="1600" height="1067" fetchpriority="high">
+          <div class="hero-copy"><span class="eyebrow">UNIVERSITY OF CAPE COAST</span><h1>A room for<br>your next class.</h1><a class="hero-link" href="#room-search">Find a classroom</a></div>
+        </div>
+        <section class="stats" aria-label="Campus overview"><div><span>Classrooms</span><strong>59 <small>across campus</small></strong></div><div><span>Lecture theatres</span><strong>03 <small>one connected campus</small></strong></div><div><span>Available on the selected day</span><strong id="free-stat">â€”</strong></div></section>
+        <div class="section-heading"><div><h2>Lecture theatres</h2></div><button class="text-button" id="all-buildings">All buildings</button></div>
+        <div id="buildings" class="building-grid"></div>
+        <section id="room-search" class="room-section"><div class="section-heading"><div><h2>Classrooms</h2></div><span class="timezone">Africa / Accra</span></div>
+          <form id="filters" class="filters"><label>Date<input id="date" type="date" required></label><label>Building<select id="building"><option value="">All theatres</option><option value="SW">Sandwich Â· SW</option><option value="NLT">New Lecture Theatre Â· NLT</option><option value="CALC">C. A. Ackah Â· CALC</option></select></label><button class="primary" type="submit">Show rooms</button></form>
+          <p id="search-error" class="error" role="alert"></p>
+          <div class="results-heading"><span id="result-count"></span><label class="check-label"><input type="checkbox" id="available-only"> Available only</label></div><div id="rooms" class="room-grid"></div><button id="more-rooms" class="text-button more-rooms" hidden>Show more rooms</button>
+        </section>
+      </section>
+      <section id="bookings-page" hidden><div class="section-heading"><h1>My bookings</h1></div><div id="my-bookings" class="record-list"></div></section>
+      <section id="admin-page" hidden>
+        <div class="admin-head"><div><span class="eyebrow muted">TIMETABLE OFFICE</span><h1>Room management</h1></div><p class="admin-summary" id="admin-summary"></p></div>
+        <div class="admin-tabs" role="tablist" aria-label="Request status"><button class="admin-tab selected" data-admin-tab="pending" role="tab">Pending <b id="tab-pending">0</b></button><button class="admin-tab" data-admin-tab="approved" role="tab">Approved <b id="tab-approved">0</b></button><button class="admin-tab" data-admin-tab="rejected" role="tab">Rejected <b id="tab-rejected">0</b></button><button class="admin-tab" data-admin-tab="all" role="tab">All <b id="tab-all">0</b></button></div>
+        <div class="admin-layout">
+          <div class="admin-main">
+            <div class="panel"><div class="panel-head"><h2>Requests</h2><span class="panel-count" id="requests-count"></span></div><div id="admin-bookings" class="record-list"></div></div>
+            <div class="panel"><div class="panel-head"><h2>Temporary unavailability</h2></div><form id="block-form" class="admin-form"><label>Room<select id="block-room"></select></label><label>Date<input type="date" id="block-date" required></label><label>From<input type="time" id="block-start" step="1800" value="10:00" required></label><label>Until<input type="time" id="block-end" step="1800" value="11:30" required></label><label class="wide">Reason<input id="block-reason" required minlength="3" maxlength="120" placeholder="e.g. Electrical maintenance"></label><button type="submit" class="primary wide">Mark unavailable</button></form><p id="block-error" class="error" role="alert"></p><div id="blocks" class="record-list"></div></div>
+          </div>
+          <aside class="admin-side"><div class="panel"><div class="panel-head"><h2>Booking window</h2></div><form id="settings-form" class="admin-form single"><label>Day opens<input type="time" id="set-open" step="1800" required></label><label>Last class ends<input type="time" id="set-close" step="1800" required></label><label>Longest class<select id="set-max"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4">4 hours</option><option value="5">5 hours</option><option value="6">6 hours</option></select></label><button type="submit" class="primary">Save window</button></form><p id="settings-error" class="error" role="alert"></p><p class="panel-note">Applies to every classroom in this preview. Whole-hour periods only.</p></div></aside>
+        </div>
+      </section>
+      <footer><span>University of Cape Coast</span><nav class="footer-links"><a href="/privacy.html">Privacy policy</a><a href="/terms.html">Terms of service</a></nav><span>UCC Spaces</span></footer>
+    </main>
+  </div>
+  <dialog id="booking-dialog"><form id="booking-form"><button class="dialog-close" type="button" id="close-dialog" aria-label="Close booking form">Ã—</button><h2 id="booking-title">Request a room</h2><p id="booking-slot" class="secondary"></p><label>Course or activity<input id="purpose" required maxlength="100" placeholder="e.g. BUS 201 group revision"></label><label>Course code<input id="course-code" maxlength="20" placeholder="e.g. BUS 201"></label><label>Supervisor<input id="supervisor" maxlength="80" placeholder="e.g. Dr A. Mensah"></label><p class="form-note" id="booking-note">Whole-hour period. Approval required.</p><p id="booking-error" class="error" role="alert"></p><button type="submit" class="primary full">Send request</button></form></dialog>
+  <dialog id="auth-dialog" class="auth-dialog">
+    <button class="dialog-close" type="button" id="close-auth" aria-label="Close sign in">Ã—</button>
+    <form id="auth-login" class="auth-form">
+      <span class="eyebrow muted">UCC SPACES</span>
+      <h2>Sign in to book</h2>
+      <p class="secondary">Classroom requests need an account.</p>
+      <label>Email<input id="login-email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <button type="submit" class="primary full">Sign in</button>
+      <p class="auth-switch"><button type="button" class="text-button" data-auth-view="forgot">Forgot password?</button></p>
+      <p class="auth-switch">New here? <button type="button" class="text-button" data-auth-view="register">Create an account</button></p>
+    </form>
+    <form id="auth-register" class="auth-form" hidden>
+      <span class="eyebrow muted">NEW ACCOUNT</span>
+      <h2>Create an account</h2>
+      <label>Full name<input id="reg-name" autocomplete="name" minlength="2" maxlength="80" required></label>
+      <label>Email<input id="reg-email" type="email" autocomplete="email" required></label>
+      <label>Password<input id="reg-password" type="password" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirm password<input id="reg-confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+      <p class="form-note">At least 8 characters, with a letter and a number.</p>
+      <button type="submit" class="primary full">Create account</button>
+      <p class="auth-switch">Already registered? <button type="button" class="text-button" data-auth-view="login">Sign in</button></p>
+    </form>
+    <form id="auth-forgot" class="auth-form" hidden>
+      <span class="eyebrow muted">PASSWORD HELP</span>
+      <h2>Forgot password?</h2>
+      <p class="secondary">Enter the email you used for your preview account.</p>
+      <label>Email<input id="forgot-email" type="email" autocomplete="email" required></label>
+      <button type="submit" class="primary full">Send reset code</button>
+      <p class="auth-switch"><button type="button" class="text-button" data-auth-view="login">Back to sign in</button></p>
+    </form>
+    <form id="auth-reset" class="auth-form" hidden>
+      <span class="eyebrow muted">RESET PASSWORD</span>
+      <h2>Choose a new password</h2>
+      <label>Email<input id="reset-email" type="email" autocomplete="email" required></label>
+      <label>Reset code<input id="reset-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+      <label>New password<input id="reset-password" type="password" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirm password<input id="reset-confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+      <button type="submit" class="primary full">Reset password</button>
+      <p class="auth-switch"><button type="button" class="text-button" data-auth-view="forgot">Send another code</button></p>
+    </form>
+    <p id="auth-error" class="error" role="alert"></p>
+    <p id="auth-note" class="auth-note" role="status"></p>
+    <p class="auth-foot">Preview accounts are stored in this browser.</p>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

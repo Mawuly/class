@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#062D57">
+    <title>UCC Room Finder</title>
+    <meta name="description" content="Find and request available classrooms at the University of Cape Coast.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161C'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%23EDE6DA'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body class="is-landing">
+  <!-- Campus footage. Sources are chosen by time of day in app.js; see public/media/README.md. -->
+  <div class="stage" aria-hidden="true">
+    <div class="stage__fallback"></div>
+    <video class="stage__video" muted playsinline loop preload="none"></video>
+    <div class="stage__scrim"></div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="/">UCC Room Finder</a>
+    <span class="clock mono" data-clock></span>
+    <span class="live"><span class="live__dot"></span>LIVE</span>
+    <nav class="topbar__nav" data-signed-in hidden aria-label="Main">
+      <a class="topbar__link" href="#/" data-nav="dashboard">Dashboard</a>
+      <a class="topbar__link" href="#/board" data-nav="board">Day board</a>
+      <a class="topbar__link topbar__link--portal" href="/admin" data-admin-only hidden>Timetable office <span class="count mono" data-pending-badge hidden></span></a>
+      <button class="link-button topbar__who" type="button" data-user-name data-account aria-label="Your account and password"></button>
+      <button class="link-button" type="button" data-sign-out>Sign out</button>
+    </nav>
+  </header>
+
+  <!-- Landing / sign-in ------------------------------------------------------------ -->
+  <main class="landing" data-view="landing">
+    <section class="now glass" aria-live="polite" aria-label="Rooms free right now">
+      <p class="now__count"><span class="serif now__free" data-free>–</span><span class="now__total mono" data-total></span></p>
+      <p class="now__label" data-now-label>rooms free right now</p>
+      <div class="ticker" data-ticker><div class="ticker__track mono" data-ticker-track></div></div>
+    </section>
+
+    <section class="auth glass" aria-labelledby="auth-title">
+      <form class="form" data-form="login" novalidate>
+        <h1 class="serif auth__title" id="auth-title">Sign in</h1>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Sign in</button>
+        <p class="auth__forgot"><button class="link-button" type="button" data-switch="forgot">Forgot your password?</button></p>
+        <p class="auth__switch">New here? <button class="link-button" type="button" data-switch="register">Create an account</button></p>
+        <p class="auth__staff">Lecturers register here too, and attach their offer or appointment letter for checking. Timetable office staff: use the <a href="/admin">timetable office portal</a>.</p>
+      </form>
+
+      <form class="form" data-form="forgot" novalidate hidden>
+        <h1 class="serif auth__title">Forgot your password?</h1>
+        <!-- By email: a code. Without email set up: the timetable office. app.js shows one. -->
+        <p class="auth__text" data-reset-by="email">Enter the email you registered with and we’ll send you a 6-digit code to choose a new password.</p>
+        <div data-reset-by="office" hidden>
+          <p class="auth__text">The timetable office resets passwords in person, so nobody else can take over your account.</p>
+          <ol class="steps">
+            <li>Enter the email you registered with. The timetable office is told.</li>
+            <li>Visit or call them with your student or staff ID card.</li>
+            <li>They give you a temporary password. Sign in with it and choose a new one.</li>
+          </ol>
+        </div>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="username" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit" data-forgot-submit>Send me a code</button>
+        <p class="auth__done" data-forgot-done hidden role="status"></p>
+        <p class="auth__switch"><button class="link-button" type="button" data-switch="login">Back to sign in</button></p>
+      </form>
+
+      <!-- Step 2 of a reset by email: the code and a new password -->
+      <form class="form" data-form="reset-code" novalidate hidden>
+        <h1 class="serif auth__title" data-code-title>Check your email</h1>
+        <p class="auth__text" data-code-sent></p>
+        <label class="field">
+          <span class="field__label">6-digit code</span>
+          <input name="code" class="mono code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+                 pattern="[0-9 ]*" placeholder="000 000" required>
+        </label>
+        <label class="field">
+          <span class="field__label">New password</span>
+          <input name="newPassword" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <label class="field">
+          <span class="field__label">New password again</span>
+          <input name="repeat" type="password" autocomplete="new-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Reset password and sign in</button>
+        <p class="auth__switch">No code? If it was emailed, check your spam folder. You can also <button class="link-button" type="button" data-resend>send a new code</button>,
+          or contact the timetable office with your ID card.</p>
+        <p class="auth__switch"><button class="link-button" type="button" data-switch="login">Back to sign in</button></p>
+      </form>
+
+      <form class="form" data-form="register" novalidate hidden>
+        <h1 class="serif auth__title">Create an account</h1>
+        <fieldset class="account-type">
+          <legend class="field__label">I am</legend>
+          <label class="account-type__option">
+            <input type="radio" name="accountType" value="student" checked>
+            <span><b>A student</b><small>Request study, seminar and meeting rooms</small></span>
+          </label>
+          <label class="account-type__option">
+            <input type="radio" name="accountType" value="lecturer">
+            <span><b>A lecturer</b><small>Book lecture halls and labs. Needs your offer or appointment letter</small></span>
+          </label>
+        </fieldset>
+        <label class="field">
+          <span class="field__label">Full name</span>
+          <input name="name" autocomplete="name" required minlength="2" maxlength="80">
+        </label>
+        <label class="field">
+          <span class="field__label">University email</span>
+          <input name="email" type="email" autocomplete="email" required>
+        </label>
+        <div class="field-row" data-student-only>
+          <label class="field">
+            <span class="field__label">Index number <em>optional</em></span>
+            <input name="indexNumber" class="mono" maxlength="30">
+          </label>
+          <label class="field">
+            <span class="field__label">Department <em>optional</em></span>
+            <input name="department" maxlength="80">
+          </label>
+        </div>
+        <div data-staff-slot hidden></div>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input name="password" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit" data-register-submit>Create account</button>
+        <p class="auth__switch">Already registered? <button class="link-button" type="button" data-switch="login">Sign in</button></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Choose a new password after an admin reset ------------------------------------- -->
+  <main class="landing landing--single" data-view="password" hidden>
+    <section class="auth glass" aria-labelledby="pw-title">
+      <form class="form" data-form="new-password" novalidate>
+        <h1 class="serif auth__title" id="pw-title">Choose a new password</h1>
+        <p class="auth__text">You signed in with a temporary password from the timetable office. Choose your own to continue.
+          It also signs you out anywhere else you were signed in.</p>
+        <label class="field" data-temp-field>
+          <span class="field__label">Temporary password</span>
+          <input name="currentPassword" type="password" class="mono" autocomplete="current-password">
+        </label>
+        <label class="field">
+          <span class="field__label">New password</span>
+          <input name="newPassword" type="password" autocomplete="new-password" required minlength="8">
+          <span class="field__hint">8 or more characters, with a letter and a number</span>
+        </label>
+        <label class="field">
+          <span class="field__label">New password again</span>
+          <input name="repeat" type="password" autocomplete="new-password" required>
+        </label>
+        <p class="alert" data-error hidden></p>
+        <button class="button button--primary" type="submit">Save and continue</button>
+        <p class="auth__switch"><button class="link-button" type="button" data-sign-out>Sign out</button></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Dashboard -------------------------------------------------------------------- -->
+  <main class="dash" data-view="dashboard" hidden>
+    <div class="dash__head">
+      <h1 class="serif dash__greeting" data-greeting></h1>
+      <p class="mono dash__date" data-today></p>
+      <section class="access-banner" data-access-banner hidden aria-live="polite"></section>
+      <p class="phone-prompt" data-phone-prompt hidden>Add your phone number so you can reset your password by text message if you forget it.
+        <button class="link-button" type="button">Add phone number</button></p>
+    </div>
+
+    <section class="panel glass dash__next" aria-labelledby="next-title">
+      <h2 class="panel__title" id="next-title">Your next booking</h2>
+      <div data-next></div>
+    </section>
+
+    <section class="panel glass dash__find" aria-labelledby="find-title">
+      <h2 class="panel__title" id="find-title">Find a room</h2>
+      <form class="quick" data-form="find">
+        <select name="start" aria-label="Start time" data-start-options></select>
+        <span class="quick__word">for</span>
+        <select name="duration" aria-label="How long">
+          <option value="60">1h</option>
+          <option value="120" selected>2h</option>
+          <option value="180">3h</option>
+        </select>
+        <span class="quick__word">·</span>
+        <input name="people" type="number" min="1" max="500" value="10" aria-label="Number of people" class="mono quick__people">
+        <span class="quick__word">people</span>
+        <button class="button button--primary" type="submit">Search</button>
+      </form>
+      <p class="alert" data-error hidden></p>
+      <ol class="results" data-results></ol>
+    </section>
+
+    <section class="panel glass dash__notes" aria-labelledby="notes-title">
+      <h2 class="panel__title" id="notes-title">Notifications</h2>
+      <ol class="notes" data-notes></ol>
+    </section>
+
+    <section class="panel glass dash__upcoming" aria-labelledby="upcoming-title">
+      <div class="panel__head">
+        <h2 class="panel__title" id="upcoming-title">Coming up</h2>
+        <button class="link-button panel__action" type="button" data-calendar>Add to calendar</button>
+      </div>
+      <ol class="rows" data-upcoming></ol>
+    </section>
+  </main>
+
+  <!-- Day board: every room in a building against the hours of one day ----------------- -->
+  <main class="board-view" data-view="board" hidden>
+    <div class="board-bar">
+      <div class="board-bar__heading">
+        <h1 class="serif board-bar__title" data-board-heading>Day board</h1>
+        <p class="mono board-bar__summary" data-board-summary></p>
+      </div>
+      <div class="board-bar__controls">
+        <div class="day-nav" role="group" aria-label="Choose a day">
+          <button class="button button--secondary day-nav__step" type="button" data-day-step="-1" aria-label="Previous day">‹</button>
+          <button class="button button--secondary" type="button" data-day-today>Today</button>
+          <button class="button button--secondary day-nav__step" type="button" data-day-step="1" aria-label="Next day">›</button>
+          <input type="date" class="mono day-nav__date" data-board-date aria-label="Date">
+        </div>
+        <select data-board-building aria-label="Building"></select>
+      </div>
+      <ul class="legend" aria-label="Key">
+        <li><span class="swatch swatch--free"></span>Free</li>
+        <li><span class="swatch swatch--approved"></span>Booked</li>
+        <li><span class="swatch swatch--pending"></span>Awaiting approval</li>
+        <li><span class="swatch swatch--approved"><b>■</b></span>Yours</li>
+      </ul>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="board" data-board></div>
+    <p class="board-hint" data-board-hint>Click an empty slot to book it, or drag across slots for longer. With the keyboard: Tab to a room, arrow keys to pick a time, Enter to book.</p>
+    <p class="visually-hidden" aria-live="polite" data-board-live></p>
+  </main>
+
+  <!-- Room week: one room, Monday to Sunday ------------------------------------------ -->
+  <main class="board-view week-view" data-view="week" hidden>
+    <a class="week-back" href="#/board">← Day board</a>
+    <div class="board-bar">
+      <div class="board-bar__heading">
+        <h1 class="mono week-code" data-week-code></h1>
+        <p class="week-name" data-week-name></p>
+        <p class="mono board-bar__summary" data-week-facts></p>
+      </div>
+      <div class="board-bar__controls">
+        <div class="day-nav" role="group" aria-label="Choose a week">
+          <button class="button button--secondary day-nav__step" type="button" data-week-step="-1" aria-label="Previous week">‹</button>
+          <button class="button button--secondary" type="button" data-week-today>This week</button>
+          <button class="button button--secondary day-nav__step" type="button" data-week-step="1" aria-label="Next week">›</button>
+          <input type="date" class="mono day-nav__date" data-week-date aria-label="Go to the week of">
+        </div>
+      </div>
+      <ul class="legend" aria-label="Key">
+        <li><span class="swatch swatch--free"></span>Free</li>
+        <li><span class="swatch swatch--approved"></span>Booked</li>
+        <li><span class="swatch swatch--pending"></span>Awaiting approval</li>
+        <li><span class="swatch swatch--approved"><b>■</b></span>Yours</li>
+      </ul>
+    </div>
+    <p class="mono week-range" data-week-range></p>
+    <p class="alert" data-error hidden></p>
+    <div class="week" data-week></div>
+    <p class="board-hint" data-week-hint></p>
+    <p class="visually-hidden" aria-live="polite" data-week-live></p>
+  </main>
+
+  <!-- Editor sheet (your account, calendar): same sliding glass sheet as booking ----- -->
+  <dialog class="sheet" data-edit-sheet aria-labelledby="edit-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="edit-title" data-edit-title>Edit</h2>
+        <button class="link-button sheet__close" type="button" data-edit-close>Close</button>
+      </header>
+      <div data-edit-body></div>
+    </div>
+  </dialog>
+
+  <!-- Booking sheet: slides in from the right over the dimmed page ------------------- -->
+  <dialog class="sheet" data-sheet aria-labelledby="sheet-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="sheet-title" data-sheet-title>Book a room</h2>
+        <button class="link-button sheet__close" type="button" data-sheet-close>Close</button>
+      </header>
+
+      <!-- Reads like a ticket stub; updates as the form changes. -->
+      <div class="stub">
+        <p class="stub__room mono" data-stub-room></p>
+        <p class="stub__name" data-stub-name></p>
+        <div class="stub__perf" aria-hidden="true"></div>
+        <p class="stub__when mono" data-stub-when></p>
+      </div>
+
+      <form class="form sheet__form" data-form="book" novalidate>
+        <label class="field">
+          <span class="field__label">What is it for?</span>
+          <input name="title" maxlength="120" required placeholder="e.g. Data Structures lecture">
+        </label>
+        <div class="field-row field-row--3">
+          <label class="field">
+            <span class="field__label">Category</span>
+            <select name="category" data-category></select>
+          </label>
+          <label class="field" data-staff-only>
+            <span class="field__label">Course code <em>optional</em></span>
+            <input name="courseCode" class="mono" maxlength="20" placeholder="CSC 301">
+          </label>
+          <label class="field">
+            <span class="field__label">Supervisor <em>optional</em></span>
+            <input name="supervisor" maxlength="80" placeholder="Dr A. Mensah">
+          </label>
+        </div>
+        <div class="field-row field-row--3">
+          <label class="field">
+            <span class="field__label">Date</span>
+            <input name="date" type="date" class="mono" required>
+          </label>
+          <label class="field">
+            <span class="field__label">From</span>
+            <select name="start" class="mono" data-sheet-start></select>
+          </label>
+          <label class="field">
+            <span class="field__label">To</span>
+            <select name="end" class="mono" data-sheet-end></select>
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">Notes <em>optional</em></span>
+          <textarea name="notes" rows="2" maxlength="500"></textarea>
+        </label>
+
+        <!-- Weekly repeat: lecturers and admins only -->
+        <fieldset class="repeat" data-repeat hidden>
+          <label class="check">
+            <input type="checkbox" data-repeat-on>
+            <span>Repeat every week</span>
+          </label>
+          <div class="repeat__weeks" data-repeat-options hidden>
+            <label class="field">
+              <span class="field__label">For</span>
+              <select data-repeat-weeks class="mono"></select>
+            </label>
+            <p class="repeat__until mono" data-repeat-until></p>
+          </div>
+          <div class="plan" data-plan hidden aria-live="polite"></div>
+        </fieldset>
+
+        <div class="clash" data-clash hidden role="alert">
+          <p class="clash__msg" data-clash-msg></p>
+          <button class="button button--ink" type="button" data-suggest hidden></button>
+        </div>
+        <p class="alert" data-error hidden></p>
+
+        <p class="sheet__policy" data-policy></p>
+        <div class="sheet__actions">
+          <button class="button button--primary" type="submit" data-sheet-submit>Book</button>
+          <button class="button button--secondary" type="button" data-sheet-close>Cancel</button>
+        </div>
+      </form>
+
+      <div class="sheet__done" data-done hidden aria-live="polite"></div>
+    </div>
+  </dialog>
+</body>
+</html>

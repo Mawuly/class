@@ -267,6 +267,29 @@ function openRoom(room, buildingId) {
             } catch (err) { showError(form, err.message); }
           }))));
     }
+    if (room.is_active) {
+      const date = h('input', { type: 'date', required: true, min: new Date().toISOString().slice(0, 10) });
+      const start = h('input', { type: 'time', required: true, step: '1800', value: '08:00' });
+      const end = h('input', { type: 'time', required: true, step: '1800', value: '09:00' });
+      const reason = h('input', { maxlength: '300', required: true, placeholder: 'e.g. Projector maintenance' });
+      const blockForm = h('form', { class: 'form', novalidate: true },
+        h('div', { class: 'field-row field-row--3' }, field('Date', date), field('From', start), field('Until', end)),
+        field('Reason', reason), errorBox(),
+        h('div', { class: 'sheet__actions' }, h('button', { class: 'button button--secondary', type: 'submit' }, 'Mark unavailable')));
+      blockForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); showError(blockForm, '');
+        try {
+          await api('/admin/room-blocks', { method: 'POST', body: {
+            roomId: room.id, date: date.value, start: start.value, end: end.value, reason: reason.value,
+          } });
+          closeSheet(); await changed();
+        } catch (err) { showError(blockForm, err.message); }
+      });
+      parts.push(h('section', { class: 'danger' },
+        h('h3', { class: 'panel__title' }, 'Temporary unavailability'),
+        h('p', { class: 'field__hint' }, 'Use this for maintenance, cleaning or an externally reserved period. It cannot overlap an existing booking.'),
+        blockForm));
+    }
     parts.push(h('section', { class: 'danger' },
       h('h3', { class: 'panel__title' }, 'Availability'),
       h('p', { class: 'danger__status' }, status),

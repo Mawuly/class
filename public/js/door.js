@@ -132,11 +132,8 @@ function bookCard(d) {
     h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Until'), end),
     h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'What for'),
       h('input', { name: 'title', required: true, maxlength: '120', placeholder: b.needsApproval ? 'e.g. Group revision' : 'e.g. Extra tutorial' })),
-    h('div', { class: 'door-book__row' },
-      h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Type'),
-        h('select', { name: 'category' }, cats.map((c) => h('option', { value: c }, CATEGORIES[c])))),
-      h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'People'),
-        h('input', { name: 'attendees', type: 'number', min: '1', max: String(d.room.capacity), value: '1', inputmode: 'numeric', required: true }))),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Type'),
+      h('select', { name: 'category' }, cats.map((c) => h('option', { value: c }, CATEGORIES[c])))),
     h('p', { class: 'alert', 'data-error': '', hidden: true }),
     submit,
     b.needsApproval ? h('p', { class: 'muted' }, 'Student requests are checked by the timetable office before the room is yours.') : '');
@@ -151,7 +148,7 @@ function bookCard(d) {
         method: 'POST',
         body: {
           roomId: d.room.id, title: fd.get('title'), category: fd.get('category'), date: b.date,
-          start: b.start, end: fd.get('end'), attendees: Number(fd.get('attendees')),
+          start: b.start, end: fd.get('end'),
         },
       });
       if (booking.status === 'approved') {

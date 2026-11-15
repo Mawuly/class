@@ -3,21 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#12161C">
-  <title>Timetable Office</title>
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4f6fa">
+  <title>Timetable office · UCC Spaces</title>
   <meta name="description" content="The timetable office: approve requests, manage rooms and people, see how rooms are used.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161C'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%23EDE6DA'/%3E%3C/svg%3E">
   <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/admin-spaces.css">
   <script type="module" src="/js/admin-app.js"></script>
 </head>
 <body class="is-app is-board is-portal">
   <div class="stage" aria-hidden="true"><div class="stage__fallback"></div></div>
 
   <header class="topbar">
-    <a class="brand" href="/admin">Lecture Rooms</a>
-    <span class="portal-tag mono">Timetable office</span>
+    <a class="brand" href="/admin"><span class="crest">UCC</span><span class="brand__text">UCC Spaces<small>UNIVERSITY OF CAPE COAST</small></span></a>
+    <span class="portal-tag">Timetable office</span>
     <span class="clock mono" data-clock></span>
     <nav class="topbar__nav" data-signed-in hidden aria-label="Timetable office">
       <a class="topbar__link" href="#/approvals" data-nav="approvals">Approvals <span class="count mono" data-pending-badge hidden></span></a>
@@ -26,7 +27,7 @@
       <a class="topbar__link" href="#/stats" data-nav="stats">Statistics</a>
       <a class="topbar__link" href="#/audit" data-nav="audit">Audit log</a>
       <a class="topbar__link" href="#/settings" data-nav="settings">Settings</a>
-      <a class="topbar__link topbar__link--portal" href="/">Main site ↗</a>
+      <a class="topbar__link topbar__link--portal" href="/">Main site</a>
       <span class="topbar__who" data-user-name></span>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -243,6 +244,47 @@
     <p class="alert" data-error hidden></p>
     <div class="audit" data-audit></div>
     <div class="audit-more"><button class="button button--secondary" type="button" data-audit-more hidden>Load older entries</button></div>
+  </main>
+
+  <!-- Booking window (admins) ----------------------------------------------------------- -->
+  <main class="rooms-view" data-view="settings" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="page-bar__title">Settings</h1>
+        <p class="page-bar__summary">One window for every classroom. The public site uses it immediately.</p>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <section class="panel settings-panel" aria-labelledby="window-title">
+      <div class="panel__head"><h2 class="panel__title" id="window-title">Booking window</h2></div>
+      <form class="form settings-form" data-form="settings" novalidate>
+        <div class="field-row field-row--3">
+          <label class="field">
+            <span class="field__label">Day opens</span>
+            <input name="open" type="time" step="1800" required>
+          </label>
+          <label class="field">
+            <span class="field__label">Last class ends</span>
+            <input name="close" type="time" step="1800" required>
+          </label>
+          <label class="field">
+            <span class="field__label">Longest class</span>
+            <select name="maxHours">
+              <option value="1">1 hour</option>
+              <option value="2">2 hours</option>
+              <option value="3">3 hours</option>
+              <option value="4">4 hours</option>
+              <option value="5">5 hours</option>
+              <option value="6">6 hours</option>
+            </select>
+          </label>
+        </div>
+        <p class="field__hint">Classes last whole hours and must end by the closing time.</p>
+        <p class="alert" data-settings-error hidden></p>
+        <p class="settings-status" data-settings-status role="status"></p>
+        <div class="sheet__actions"><button class="button button--primary" type="submit">Save window</button></div>
+      </form>
+    </section>
   </main>
 
   <!-- Editor sheet (rooms, people, access requests) -->

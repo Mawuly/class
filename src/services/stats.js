@@ -2,7 +2,7 @@
 // Usage statistics for the timetable office.
 //
 // Utilisation = hours booked ÷ hours available, where "available" is every active room from
-// opening to closing time (07:00–21:00) on each teaching day (Monday–Friday) in the range.
+// opening to closing time on each teaching day (Monday-Friday) in the range.
 // Only approved bookings count: pending requests hold a slot but haven't been confirmed.
 const db = require('../db');
 const { booking: rules } = require('../config');

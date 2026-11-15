@@ -19,8 +19,8 @@ function linkPanel(link) {
     h('p', { class: 'cal-link__label' }, 'Your calendar link'),
     h('div', { class: 'cal-link__row' }, field, copy),
     h('div', { class: 'cal-link__apps' },
-      h('a', { class: 'button button--ink', href: link.google, target: '_blank', rel: 'noopener' }, 'Add to Google Calendar ↗'),
-      h('a', { class: 'button button--ink', href: link.outlook, target: '_blank', rel: 'noopener' }, 'Add to Outlook ↗'),
+      h('a', { class: 'button button--ink', href: link.google, target: '_blank', rel: 'noopener' }, 'Add to Google Calendar'),
+      h('a', { class: 'button button--ink', href: link.outlook, target: '_blank', rel: 'noopener' }, 'Add to Outlook'),
       h('a', { class: 'button button--ink', href: link.webcal }, 'Apple Calendar')),
     h('p', { class: 'cal-link__hint' },
       'On an iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar, and paste the link. '
