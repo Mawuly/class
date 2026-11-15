@@ -95,15 +95,13 @@ function parseInput(input) {
   };
 }
 
-async function create(user, input, { ip } = {}) {
+/** Checks shared by single and weekly bookings: everything except the date and clashes. */
+async function prepare(user, input) {
   const d = parseInput(input);
   if (!Number.isInteger(d.roomId)) throw new AppError(400, 'Choose a room');
   if (!d.title) throw new AppError(400, 'Give the booking a title');
   if (!CATEGORIES.includes(d.category)) throw new AppError(400, 'Choose a valid category');
   if (!Number.isInteger(d.attendees) || d.attendees < 1) throw new AppError(400, 'Attendees must be a whole number of at least 1');
-
-  const slotError = t.validateSlot(d);
-  if (slotError) throw new AppError(400, slotError);
 
   const room = await db.get('SELECT id, code, capacity, bookable_by FROM rooms WHERE id = ? AND is_active', [d.roomId]);
   if (!room) throw new AppError(404, 'Room not found');
@@ -117,8 +115,13 @@ async function create(user, input, { ip } = {}) {
   if (d.attendees > room.capacity) {
     throw new AppError(400, `${room.code} holds ${room.capacity} people; you entered ${d.attendees}`);
   }
+  return { d, room, status: user.role === 'student' ? 'pending' : 'approved' };
+}
 
-  const status = user.role === 'student' ? 'pending' : 'approved';
+async function create(user, input, { ip } = {}) {
+  const { d, room, status } = await prepare(user, input);
+  const slotError = t.validateSlot(d);
+  if (slotError) throw new AppError(400, slotError);
 
   const id = await db.tx(async (x) => {
     // Friendly checks first, so the user is told what is in the way and offered another slot.
@@ -158,6 +161,122 @@ async function create(user, input, { ip } = {}) {
   });
 
   return getBooking(id);
+}
+
+/* ---------- Weekly recurring bookings (staff only) ------------------------------------- */
+
+const MAX_WEEKS = 16;
+
+function seriesInput(user, input) {
+  if (user.role === 'student') throw new AppError(403, 'Only lecturers and the timetable office can book weekly');
+  const weeks = Number(input.weeks);
+  if (!Number.isInteger(weeks) || weeks < 2 || weeks > MAX_WEEKS) {
+    throw new AppError(400, `Repeat for 2 to ${MAX_WEEKS} weeks`);
+  }
+  const first = str(input.date, 10);
+  if (!t.isValidDate(first)) throw new AppError(400, 'Date must be a valid date (YYYY-MM-DD)');
+  return { weeks, dates: Array.from({ length: weeks }, (_, i) => t.addDays(first, 7 * i)) };
+}
+
+/**
+ * Looks at every week: is the time allowed, is the room free, is the person free?
+ * Returns one line per date: { date, ok, reason?, clash? }.
+ */
+async function planSeries(exec, user, d, room, dates) {
+  const plan = [];
+  for (const date of dates) {
+    const slotError = t.validateSlot({ date, start: d.start, end: d.end });
+    if (slotError) { plan.push({ date, ok: false, reason: slotError, clash: 'rules' }); continue; }
+    const rc = await roomClashes(exec, d.roomId, date, d.start, d.end);
+    if (rc.length) {
+      const c = rc[0];
+      plan.push({ date, ok: false, clash: 'room',
+        reason: `${room.code} is taken ${c.start_time}–${c.end_time}${c.course_code ? ` by ${c.course_code}` : ''}` });
+      continue;
+    }
+    const uc = await userClashes(exec, user.id, date, d.start, d.end);
+    if (uc.length) {
+      const c = uc[0];
+      plan.push({ date, ok: false, clash: 'user', reason: `You are booked in ${c.room_code} ${c.start_time}–${c.end_time}` });
+      continue;
+    }
+    plan.push({ date, ok: true });
+  }
+  return plan;
+}
+
+/** Shows which weeks are free before anything is booked. */
+async function previewSeries(user, input) {
+  const { weeks, dates } = seriesInput(user, input);
+  const { d, room } = await prepare(user, input);
+  if (!t.isValidTime(d.start) || !t.isValidTime(d.end)) throw new AppError(400, 'Times must be in HH:MM format');
+  return { room: room.code, weeks, start: d.start, end: d.end, dates: await planSeries(db, user, d, room, dates) };
+}
+
+/**
+ * Books every free week in one transaction. If some weeks clash, nothing is booked unless
+ * skipClashes is true, in which case only the free weeks are booked.
+ */
+async function createSeries(user, input, { ip } = {}) {
+  const { dates } = seriesInput(user, input);
+  const { d, room, status } = await prepare(user, input);
+  try {
+    return await db.tx(async (x) => {
+      const plan = await planSeries(x, user, d, room, dates);
+      const free = plan.filter((p) => p.ok);
+      const blocked = plan.filter((p) => !p.ok);
+      if (blocked.length && input.skipClashes !== true) {
+        throw new AppError(409, `${blocked.length} of ${plan.length} weeks can't be booked. Skip them, or choose another time.`,
+          { dates: plan });
+      }
+      if (!free.length) throw new AppError(409, 'None of these weeks are free at that time', { dates: plan });
+
+      const series = await x.get(
+        `INSERT INTO booking_series (user_id, room_id, weekday, start_time, end_time, first_date, last_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        [user.id, d.roomId, new Date(`${free[0].date}T00:00:00Z`).getUTCDay(), d.start, d.end, free[0].date, free[free.length - 1].date],
+      );
+      for (const p of free) {
+        await x.run(
+          `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, notes, status, series_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [d.roomId, user.id, d.title, d.category, d.courseCode, p.date, d.start, d.end, d.attendees, d.notes, status, series.id],
+        );
+      }
+      await audit({ userId: user.id, action: 'series.create', entity: 'booking_series', entityId: series.id,
+        details: { room: room.code, weeks: free.length, skipped: blocked.map((b) => b.date) }, ip }, x);
+      return { seriesId: series.id, room: room.code, start: d.start, end: d.end, booked: free.map((p) => p.date), skipped: blocked };
+    });
+  } catch (err) {
+    if (err.code === EXCLUSION_VIOLATION) {
+      throw new AppError(409, 'One of these weeks was booked by someone else a moment ago. Check the dates again.');
+    }
+    throw err;
+  }
+}
+
+/** Cancels every week of a series that hasn't happened yet. */
+async function cancelSeries(user, seriesId, { ip } = {}) {
+  const series = await db.get('SELECT id, user_id, room_id FROM booking_series WHERE id = ?', [seriesId]);
+  if (!series || (series.user_id !== user.id && user.role !== 'admin')) throw new AppError(404, 'Weekly booking not found');
+  const today = t.localDate();
+  return db.tx(async (x) => {
+    const { rows } = await x.run(
+      `UPDATE bookings SET status = 'cancelled', updated_at = now()
+       WHERE series_id = ? AND status IN ${HOLDING} AND (date > ? OR (date = ? AND end_time > ?))
+       RETURNING id, date`,
+      [seriesId, today, today, t.localTime()],
+    );
+    if (!rows.length) throw new AppError(400, 'No weeks of this booking are still to come');
+    await audit({ userId: user.id, action: 'series.cancel', entity: 'booking_series', entityId: seriesId,
+      details: { cancelled: rows.length }, ip }, x);
+    if (series.user_id !== user.id) {
+      const code = (await x.get('SELECT code FROM rooms WHERE id = ?', [series.room_id])).code;
+      await notify(series.user_id, `The timetable office cancelled the remaining ${rows.length} week${rows.length === 1 ? '' : 's'} `
+        + `of your weekly booking in ${code}.`, x);
+    }
+    return { cancelled: rows.length };
+  });
 }
 
 async function listMine(user, scope = 'upcoming') {
@@ -265,6 +384,6 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
 }
 
 module.exports = {
-  CATEGORIES, STUDENT_CATEGORIES, create, listMine, cancel, listByStatus, listDecided, requestContext,
+  CATEGORIES, STUDENT_CATEGORIES, MAX_WEEKS, create, previewSeries, createSeries, cancelSeries, listMine, cancel, listByStatus, listDecided, requestContext,
   decide, getBooking, suggestSlot,
 };

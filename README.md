@@ -59,6 +59,11 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   down an empty slot to book; keyboard arrows move by half-hour and by day; previous / this / next
   week, and a date picker; the address (#/room/12?date=…) can be bookmarked or shared
 
+- Weekly bookings for lecturers and admins: tick "Repeat every week" in the booking sheet, choose 2–16
+  weeks, and check the dates first: each week shows free, or what is in the way. Book all of them, or
+  skip the weeks that clash; everything is booked in one transaction. Cancel one week, or every
+  remaining week of the series, from Coming up
+
 Next: recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally

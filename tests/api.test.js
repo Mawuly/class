@@ -948,3 +948,86 @@ describe('room week', () => {
     assert.deepEqual([res.body.from, res.body.to], ['2026-11-09', '2026-11-15']);
   });
 });
+
+describe('weekly bookings', () => {
+  let lecturer; let other; let student; let admin;
+  const first = tomorrow();
+  const week = (n) => addDays(first, 7 * n);
+  const body = (extra = {}) => ({
+    roomId: null, title: 'Algorithms', category: 'lecture', courseCode: 'csc 302', date: first,
+    start: '09:00', end: '11:00', attendees: 80, weeks: 4, ...extra,
+  });
+
+  beforeEach(async () => {
+    await resetDb();
+    lecturer = await signedIn('weekly@campus.test', 'lecturer');
+    other = await signedIn('other.lect@campus.test', 'lecturer');
+    student = await signedIn('weekly.student@campus.test');
+    admin = await signedIn('weekly.admin@campus.test', 'admin');
+  });
+
+  test('preview shows every week; a clash in week 3 is named', async () => {
+    const room = await roomId('LT-2');
+    await other.post('/api/bookings').send({ roomId: room, title: 'Exam', category: 'exam', courseCode: 'MATH 101',
+      date: week(2), start: '10:00', end: '12:00', attendees: 100 });
+    const res = await lecturer.post('/api/bookings/series/preview').send(body({ roomId: room }));
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.dates.map((d) => d.date), [week(0), week(1), week(2), week(3)]);
+    assert.deepEqual(res.body.dates.map((d) => d.ok), [true, true, false, true]);
+    assert.match(res.body.dates[2].reason, /LT-2 is taken 10:00–12:00 by MATH 101/);
+    assert.equal(await db.get('SELECT count(*)::int AS n FROM bookings WHERE user_id = ?', [lecturer.user.id]).then((r) => r.n), 0);
+  });
+
+  test('with a clash, nothing is booked unless you choose to skip it', async () => {
+    const room = await roomId('LT-2');
+    await other.post('/api/bookings').send({ roomId: room, title: 'Exam', category: 'exam', date: week(2), start: '10:00', end: '12:00', attendees: 100 });
+    const refused = await lecturer.post('/api/bookings/series').send(body({ roomId: room }));
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.dates.length, 4);
+    assert.equal(await db.get('SELECT count(*)::int AS n FROM bookings WHERE user_id = ?', [lecturer.user.id]).then((r) => r.n), 0);
+
+    const ok = await lecturer.post('/api/bookings/series').send(body({ roomId: room, skipClashes: true }));
+    assert.equal(ok.status, 201);
+    assert.deepEqual(ok.body.booked, [week(0), week(1), week(3)]);
+    assert.deepEqual(ok.body.skipped.map((s) => s.date), [week(2)]);
+    const rows = await db.all('SELECT date, status, series_id, course_code FROM bookings WHERE user_id = ? ORDER BY date', [lecturer.user.id]);
+    assert.equal(rows.length, 3);
+    assert.ok(rows.every((r) => r.status === 'approved' && r.series_id === ok.body.seriesId && r.course_code === 'CSC 302'));
+    const series = await db.get('SELECT weekday, first_date, last_date FROM booking_series WHERE id = ?', [ok.body.seriesId]);
+    assert.deepEqual([series.first_date, series.last_date], [week(0), week(3)]);
+    assert.equal(series.weekday, new Date(`${first}T00:00:00Z`).getUTCDay());
+  });
+
+  test('your own other bookings count as clashes too', async () => {
+    await lecturer.post('/api/bookings').send({ roomId: await roomId('LT-1'), title: 'Other', category: 'lecture', date: week(1), start: '10:00', end: '11:00', attendees: 50 });
+    const res = await lecturer.post('/api/bookings/series/preview').send(body({ roomId: await roomId('LT-3') }));
+    assert.equal(res.body.dates[1].clash, 'user');
+    assert.match(res.body.dates[1].reason, /You are booked in LT-1/);
+  });
+
+  test('students cannot book weekly; weeks must be 2–16; dates past 150 days are refused per week', async () => {
+    const room = await roomId('LIB-S1');
+    const s = await student.post('/api/bookings/series/preview').send(body({ roomId: room, category: 'study', attendees: 3 }));
+    assert.equal(s.status, 403);
+    assert.equal((await lecturer.post('/api/bookings/series/preview').send(body({ roomId: room, weeks: 1, attendees: 3 }))).status, 400);
+    assert.equal((await lecturer.post('/api/bookings/series/preview').send(body({ roomId: room, weeks: 17, attendees: 3 }))).status, 400);
+    const far = await lecturer.post('/api/bookings/series/preview').send(body({ roomId: room, attendees: 3, date: addDays(localDate(), 140), weeks: 3 }));
+    assert.deepEqual(far.body.dates.map((d) => d.ok), [true, true, false]);
+    assert.match(far.body.dates[2].reason, /150 days/);
+  });
+
+  test('cancelling a series cancels the weeks still to come; an admin doing it tells the owner', async () => {
+    const created = await lecturer.post('/api/bookings/series').send(body({ roomId: await roomId('LT-3') }));
+    // One week cancelled on its own first
+    const one = await db.get('SELECT id FROM bookings WHERE series_id = ? AND date = ?', [created.body.seriesId, week(1)]);
+    await lecturer.post(`/api/bookings/${one.id}/cancel`);
+    assert.equal((await other.post(`/api/bookings/series/${created.body.seriesId}/cancel`)).status, 404);
+    const res = await admin.post(`/api/bookings/series/${created.body.seriesId}/cancel`);
+    assert.equal(res.body.cancelled, 3);
+    const left = await db.get("SELECT count(*)::int AS n FROM bookings WHERE series_id = ? AND status = 'approved'", [created.body.seriesId]);
+    assert.equal(left.n, 0);
+    const notes = await lecturer.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /cancelled the remaining 3 weeks of your weekly booking in LT-3/);
+    assert.equal((await lecturer.post(`/api/bookings/series/${created.body.seriesId}/cancel`)).status, 400);
+  });
+});

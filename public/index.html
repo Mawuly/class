@@ -424,6 +424,22 @@
           <textarea name="notes" rows="2" maxlength="500"></textarea>
         </label>
 
+        <!-- Weekly repeat: lecturers and admins only -->
+        <fieldset class="repeat" data-repeat hidden>
+          <label class="check">
+            <input type="checkbox" data-repeat-on>
+            <span>Repeat every week</span>
+          </label>
+          <div class="repeat__weeks" data-repeat-options hidden>
+            <label class="field">
+              <span class="field__label">For</span>
+              <select data-repeat-weeks class="mono"></select>
+            </label>
+            <p class="repeat__until mono" data-repeat-until></p>
+          </div>
+          <div class="plan" data-plan hidden aria-live="polite"></div>
+        </fieldset>
+
         <div class="clash" data-clash hidden role="alert">
           <p class="clash__msg" data-clash-msg></p>
           <button class="button button--ink" type="button" data-suggest hidden></button>

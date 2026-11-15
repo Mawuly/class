@@ -322,19 +322,23 @@ function renderNext(bookings) {
 }
 
 /** Cancel needs a second click within a few seconds, so a stray tap cannot drop a booking. */
-function cancelButton(b) {
+function cancelButton(b, series = false) {
   let armed = null;
-  const button = h('button', { class: 'link-button row__cancel', type: 'button', 'aria-label': `Cancel ${b.title} in ${b.room_code}` }, 'Cancel');
+  const label = series ? 'Cancel series' : 'Cancel';
+  const button = h('button', {
+    class: 'link-button row__cancel', type: 'button',
+    'aria-label': series ? `Cancel every remaining week of ${b.title} in ${b.room_code}` : `Cancel ${b.title} in ${b.room_code} on ${longDate(b.date)}`,
+  }, label);
   button.addEventListener('click', async () => {
     if (!armed) {
-      button.textContent = 'Confirm cancel?';
-      armed = setTimeout(() => { armed = null; button.textContent = 'Cancel'; }, 4000);
+      button.textContent = series ? 'Cancel all weeks?' : 'Confirm cancel?';
+      armed = setTimeout(() => { armed = null; button.textContent = label; }, 4000);
       return;
     }
     clearTimeout(armed);
     button.disabled = true;
     try {
-      await api(`/bookings/${b.id}/cancel`, { method: 'POST' });
+      await api(series ? `/bookings/series/${b.series_id}/cancel` : `/bookings/${b.id}/cancel`, { method: 'POST' });
       await refreshAfterChange();
     } catch (err) {
       button.disabled = false;
@@ -348,10 +352,13 @@ function bookingRow(b) {
   return h('li', { class: `row row--${b.status}` },
     h('span', { class: 'mono row__room' }, b.room_code),
     h('span', { class: 'row__title' }, b.status === 'approved' ? h('span', { class: 'mine-mark', 'aria-hidden': 'true' }, '■ ') : '', b.title),
-    h('span', { class: 'mono row__when' }, `${longDate(b.date)} ${b.start_time}–${b.end_time}`),
+    h('span', { class: 'mono row__when' }, `${longDate(b.date)} ${b.start_time}–${b.end_time}`,
+      b.series_id ? h('span', { class: 'row__weekly', title: 'Part of a weekly booking' }, '↻ weekly') : ''),
     h('span', { class: 'row__side' },
       h('span', { class: `tag tag--${b.status}` }, b.status === 'pending' ? 'awaiting approval' : b.status),
-      ['pending', 'approved'].includes(b.status) ? cancelButton(b) : ''));
+      ['pending', 'approved'].includes(b.status)
+        ? h('span', { class: 'row__cancels' }, cancelButton(b), b.series_id ? cancelButton(b, true) : '')
+        : ''));
 }
 
 function renderUpcoming(bookings) {

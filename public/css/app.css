@@ -908,6 +908,27 @@ kbd {
 .wnow::before { content: ''; position: absolute; left: 0; right: 0; top: calc(var(--p) * 1%); height: 2px; margin-top: -1px; background: var(--bone); }
 .wnow__label { position: absolute; left: 4px; top: calc(var(--p) * 1%); transform: translateY(-120%); padding: 1px 5px; border-radius: 3px; background: var(--bone); color: var(--ink); font-size: 10px; font-weight: 500; }
 
+/* ---------- Weekly repeat ------------------------------------------------------------ */
+
+.repeat { display: grid; gap: 12px; margin: 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: var(--r-input); min-width: 0; }
+.repeat:has([data-repeat-on]:checked) { border-color: rgb(var(--bone-rgb) / 0.4); }
+.repeat__weeks { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: end; }
+.repeat__until { font-size: 12px; color: var(--text); padding-bottom: 10px; }
+.plan { display: grid; gap: 8px; }
+.plan__summary { font-size: 13px; color: var(--text-strong); }
+.plan__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 260px; overflow-y: auto; }
+.plan__row { display: grid; grid-template-columns: 18px 112px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 4px 6px; border-radius: 4px; font-size: 12px; }
+.plan__mark { font-family: var(--mono); color: var(--text-muted); }
+.plan__date { color: var(--text-strong); }
+.plan__what { color: var(--text-muted); }
+/* A clashing week reads like the clash panel: inverted Bone. */
+.plan__row.is-blocked { background: var(--bone); color: var(--ink); }
+.plan__row.is-blocked .plan__mark, .plan__row.is-blocked .plan__date, .plan__row.is-blocked .plan__what { color: var(--ink); }
+.plan__skip { font-size: 13px; }
+
+.row__cancels { display: flex; gap: 10px; white-space: nowrap; }
+.row__weekly { display: block; color: var(--text-strong); }
+
 /* ---------- Statistics -------------------------------------------------------------- */
 
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
