@@ -16,7 +16,7 @@ const GROUPS = {
   security: ['auth.%', 'calendar.%', 'phone.%', 'user.reset_password', 'user.role_change', 'user.deactivate', 'user.reactivate', 'user.promote_admin', 'access.%'],
   failed: ['auth.login_failed'],
   bookings: ['booking.%', 'series.%'],
-  rooms: ['room.%', 'building.%'],
+  rooms: ['room.%', 'building.%', 'settings.%'],
   people: ['user.%', 'access.%', 'auth.register'],
 };
 
@@ -71,6 +71,10 @@ function describe(e) {
     'room.deactivate': [`deactivated room ${e.target_room || ''}`.trim(), d.cancelled ? `${d.cancelled} booking${d.cancelled === 1 ? '' : 's'} cancelled` : ''],
     'room.reactivate': [`reactivated room ${e.target_room || ''}`.trim()],
     'room.delete': [`deleted room ${d.code || ''}`.trim()],
+    'room.block': [`closed ${e.target_room || 'a room'} on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `“${d.reason}”` : ''],
+    'room.unblock': [`made ${e.target_room || 'a room'} available again on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `was closed for “${d.reason}”` : ''],
+    'settings.update': ['changed the booking window', Object.entries(d).map(([k, v]) => `${{ open: 'opens', close: 'closes', maxHours: 'longest booking' }[k] || k} ${v.from} → ${v.to}${k === 'maxHours' ? ' h' : ''}`).join(', ')],
+    'booking.check_out': [`checked out of ${owner || 'their '}booking for ${booking} early`, d.ended ? `left at ${d.ended}, booked until ${d.planned_end}` : ''],
     'building.create': [`added building ${e.target_building || d.code || ''}`.trim()],
     'building.update': [`edited building ${e.target_building || d.code || ''}`.trim()],
     'building.delete': [`deleted building ${d.code || ''}`.trim()],

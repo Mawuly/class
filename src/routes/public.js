@@ -10,4 +10,10 @@ router.get('/now', async (req, res) => {
   res.json(await rooms.now());
 });
 
+// Every active room with its free periods on ?date= (default today). No booking details.
+router.get('/rooms', async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=30, s-maxage=30');
+  res.json(await rooms.publicRooms(req.query));
+});
+
 module.exports = router;

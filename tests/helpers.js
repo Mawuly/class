@@ -14,9 +14,13 @@ const PASSWORD = 'Testing123';
 /** Empties the test database and loads the standard buildings and rooms. */
 async function resetDb() {
   await migrate(db);
-  await db.pool.query(`TRUNCATE phone_verifications, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users
+  await db.pool.query(`TRUNCATE room_blocks, phone_verifications, password_resets, access_requests, audit_log, notifications, bookings, booking_series, rooms, buildings, users
                        RESTART IDENTITY CASCADE`);
   await seedReference(db);
+  // Booking window back to the defaults (a test may have changed it on /admin → Settings).
+  await db.run(`INSERT INTO app_meta (key, value) VALUES ('booking_open', '06:30'), ('booking_close', '20:30'), ('booking_max_hours', '4')
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
+  await require('../src/services/settings').load(db);
 }
 
 /** A supertest agent that keeps cookies and always sends the CSRF header. */

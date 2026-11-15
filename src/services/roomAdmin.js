@@ -217,14 +217,31 @@ async function deleteRoom(admin, id, { ip } = {}) {
   const room = await roomRow(id);
   const { n } = await db.get('SELECT count(*)::int AS n FROM bookings WHERE room_id = ?', [id]);
   if (n) {
-    throw new AppError(409, `${room.code} has ${n} booking${n === 1 ? '' : 's'} on record, so it can't be deleted. `
-      + 'Deactivate it instead: it disappears from searches and the board, and its history is kept.');
+    // A room with history is deactivated instead, so its bookings keep pointing at it.
+    const { today, now } = nowParts();
+    const { upcoming } = await db.get(
+      `SELECT count(*)::int AS upcoming FROM bookings WHERE room_id = ? AND status IN ${HOLDING}
+         AND (date > ? OR (date = ? AND end_time > ?))`,
+      [id, today, today, now],
+    );
+    if (upcoming) {
+      throw new AppError(409, `${room.code} still has ${upcoming} upcoming booking${upcoming === 1 ? '' : 's'}. `
+        + 'Deactivate it from its edit sheet: you will be asked to cancel them and the people who booked are told.');
+    }
+    if (room.is_active) {
+      await db.tx(async (x) => {
+        await x.run('UPDATE rooms SET is_active = false WHERE id = ?', [id]);
+        await audit({ userId: admin.id, action: 'room.deactivate', entity: 'room', entityId: id, details: { instead_of: 'delete' }, ip }, x);
+      });
+    }
+    return { deleted: false, deactivated: true };
   }
   await db.tx(async (x) => {
     await x.run('DELETE FROM booking_series WHERE room_id = ?', [id]);
     await x.run('DELETE FROM rooms WHERE id = ?', [id]);
     await audit({ userId: admin.id, action: 'room.delete', entity: 'room', entityId: id, details: { code: room.code }, ip }, x);
   });
+  return { deleted: true, deactivated: false };
 }
 
 module.exports = {

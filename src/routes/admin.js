@@ -14,6 +14,8 @@ const QRCode = require('qrcode');
 const config = require('../config');
 const db = require('../db');
 const checkin = require('../services/checkin');
+const roomBlocks = require('../services/roomBlocks');
+const settings = require('../services/settings');
 const { baseUrl } = require('./calendar');
 
 const router = express.Router();
@@ -26,7 +28,7 @@ router.get('/bookings', async (req, res) => {
   const status = req.query.status || 'pending';
   if (status === 'decided') return res.json({ bookings: await bookings.listDecided() });
   if (!STATUSES.includes(status)) throw new AppError(400, 'Unknown status');
-  res.json({ bookings: await bookings.listByStatus(status) });
+  res.json({ bookings: await bookings.listByStatus(status, { date: req.query.date ? String(req.query.date) : null }) });
 });
 
 router.get('/bookings/:id/context', async (req, res) => {
@@ -65,8 +67,7 @@ router.patch('/rooms/:id', async (req, res) => {
   res.json(await roomAdmin.updateRoom(req.user, parseId(req.params.id, 'Room'), req.body ?? {}, { ip: req.ip }));
 });
 router.delete('/rooms/:id', async (req, res) => {
-  await roomAdmin.deleteRoom(req.user, parseId(req.params.id, 'Room'), { ip: req.ip });
-  res.json({ ok: true });
+  res.json({ ok: true, ...(await roomAdmin.deleteRoom(req.user, parseId(req.params.id, 'Room'), { ip: req.ip })) });
 });
 
 /* ---------- People ------------------------------------------------------------------ */
@@ -131,6 +132,24 @@ router.get('/audit.csv', async (req, res) => {
     'Content-Disposition': `attachment; filename="audit-log_${new Date().toISOString().slice(0, 10)}.csv"`,
   });
   res.send(await auditLog.csv(req.query));
+});
+
+/* ---------- Temporary closures --------------------------------------------------------- */
+
+// Upcoming closures, or ?roomId= / ?date= to narrow it.
+router.get('/room-blocks', async (req, res) => res.json({ blocks: await roomBlocks.list(req.query) }));
+router.post('/room-blocks', async (req, res) => {
+  res.status(201).json({ block: await roomBlocks.create(req.user, req.body ?? {}, { ip: req.ip }) });
+});
+router.delete('/room-blocks/:id', async (req, res) => {
+  res.json({ block: await roomBlocks.remove(req.user, parseId(req.params.id, 'Closure'), { ip: req.ip }) });
+});
+
+/* ---------- Booking window (Settings) --------------------------------------------------- */
+
+router.get('/settings', async (req, res) => res.json({ settings: await settings.load() }));
+router.patch('/settings', async (req, res) => {
+  res.json({ settings: await settings.update(req.user, req.body ?? {}, { ip: req.ip }) });
 });
 
 /* ---------- Door signs: QR codes for check-in ----------------------------------------- */

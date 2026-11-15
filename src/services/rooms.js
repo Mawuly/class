@@ -75,8 +75,11 @@ async function available(user, q) {
        AND NOT EXISTS (
          SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.date = ? AND b.status IN ${HOLDING}
            AND b.start_time < ? AND b.end_time > ?)
+       AND NOT EXISTS (
+         SELECT 1 FROM room_blocks rb WHERE rb.room_id = r.id AND rb.date = ?
+           AND rb.start_time < ? AND rb.end_time > ?)
      ORDER BY r.capacity ASC, ${naturalCode('r.code')}`,
-    [...args, date, end, start],
+    [...args, date, end, start, date, end, start],
   );
 
   const wanted = String(q.facilities || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -98,10 +101,17 @@ async function daySchedule(user, { date, buildingId }) {
      WHERE b.date = ? AND b.status IN ${HOLDING} ${filter} ORDER BY b.start_time`,
     args,
   );
+  const blocks = await db.all(
+    `SELECT rb.id, rb.room_id, rb.start_time, rb.end_time, rb.reason
+     FROM room_blocks rb JOIN rooms r ON r.id = rb.room_id
+     WHERE rb.date = ? ${filter} ORDER BY rb.start_time`,
+    args,
+  );
   return {
     date: day,
     open: rules.open,
     close: rules.close,
+    blocks,
     rooms: rooms.map((r) => ({ ...r, canBook: canBook(user, r) })),
     bookings: bookings.map(({ user_id: uid, ...b }) => ({ ...b, mine: uid === user.id })),
   };
@@ -120,9 +130,14 @@ async function week(user, id, { date }) {
      WHERE room_id = ? AND date BETWEEN ? AND ? AND status IN ${HOLDING} ORDER BY date, start_time`,
     [room.id, from, to],
   );
+  const blocks = await db.all(
+    `SELECT id, date, start_time, end_time, reason FROM room_blocks
+     WHERE room_id = ? AND date BETWEEN ? AND ? ORDER BY date, start_time`,
+    [room.id, from, to],
+  );
   return {
     room: { ...room, canBook: canBook(user, room) },
-    from, to, open: rules.open, close: rules.close,
+    from, to, open: rules.open, close: rules.close, blocks,
     bookings: bookings.map(({ user_id: uid, ...b }) => ({ ...b, mine: uid === user.id })),
   };
 }
@@ -136,10 +151,14 @@ async function now(at = new Date()) {
   const time = t.localTime(at);
   const rooms = await db.all(`SELECT r.id, r.code, r.name FROM rooms r WHERE r.is_active ORDER BY ${naturalCode('r.code')}`);
   const isOpen = time >= rules.open && time < rules.close;
+  // Closures count like bookings: the room is not free while it is closed.
   const bookings = await db.all(
     `SELECT room_id, start_time, end_time FROM bookings
-     WHERE date = ? AND status IN ${HOLDING} AND end_time > ? ORDER BY start_time`,
-    [date, time],
+     WHERE date = ? AND status IN ${HOLDING} AND end_time > ?
+     UNION ALL
+     SELECT room_id, start_time, end_time FROM room_blocks WHERE date = ? AND end_time > ?
+     ORDER BY start_time`,
+    [date, time, date, time],
   );
 
   const byRoom = new Map(rooms.map((r) => [r.id, []]));
@@ -178,4 +197,56 @@ async function now(at = new Date()) {
   };
 }
 
-module.exports = { TYPES, list, get, meta, available, daySchedule, week, now, canBook };
+/**
+ * Free whole-hour periods in [from, close), given the taken ranges. Periods start on the
+ * half hour (like bookings) and are at least an hour long.
+ */
+function freePeriods(taken, from, close) {
+  const slot = rules.slotMinutes;
+  const periods = [];
+  let cursor = Math.ceil(t.toMinutes(from) / slot) * slot;
+  const end = t.toMinutes(close);
+  const busy = taken.map((b) => [t.toMinutes(b.start_time), t.toMinutes(b.end_time)]).sort((a, b) => a[0] - b[0]);
+  for (const [s, e] of [...busy, [end, end]]) {
+    const gapEnd = Math.min(s, end);
+    if (gapEnd - cursor >= 60) periods.push({ start: t.fromMinutes(cursor), end: t.fromMinutes(gapEnd) });
+    cursor = Math.max(cursor, Math.ceil(e / slot) * slot);
+    if (cursor >= end) break;
+  }
+  return periods;
+}
+
+/**
+ * Public list for the site before sign-in: every active room with its free periods on a date
+ * (from now, if the date is today). Never shows booking titles or who booked.
+ */
+async function publicRooms({ date } = {}, at = new Date()) {
+  const today = t.localDate(at);
+  const day = date ? String(date) : today;
+  if (!t.isValidDate(day)) throw new AppError(400, 'Date must be a valid date (YYYY-MM-DD)');
+  if (day < today) throw new AppError(400, 'Choose today or a later date');
+  if (t.daysBetween(today, day) > rules.maxDaysAhead) throw new AppError(400, `Rooms can be booked at most ${rules.maxDaysAhead} days ahead`);
+  const rooms = await db.all(`SELECT ${ROOM_COLUMNS} FROM ${ROOM_FROM} WHERE r.is_active ORDER BY bl.code, ${naturalCode('r.code')}`);
+  const taken = await db.all(
+    `SELECT room_id, start_time, end_time FROM bookings WHERE date = ? AND status IN ${HOLDING}
+     UNION ALL SELECT room_id, start_time, end_time FROM room_blocks WHERE date = ?`,
+    [day, day],
+  );
+  const byRoom = new Map();
+  for (const b of taken) byRoom.set(b.room_id, [...(byRoom.get(b.room_id) || []), b]);
+  const now = t.localTime(at);
+  const from = day === today && now > rules.open ? now : rules.open;
+  return {
+    date: day,
+    open: rules.open,
+    close: rules.close,
+    maxHours: rules.maxHours,
+    rooms: rooms.map((r) => {
+      const periods = freePeriods(byRoom.get(r.id) || [], from, rules.close);
+      const { building_id: _b, ...room } = shapeRoom(r);
+      return { ...room, freePeriods: periods, firstFree: periods[0] || null };
+    }),
+  };
+}
+
+module.exports = { TYPES, list, get, meta, available, daySchedule, week, now, canBook, publicRooms, freePeriods };

@@ -10,6 +10,7 @@ const { notFound, errorHandler } = require('./middleware/errors');
 const { AppError } = require('./utils/errors');
 const { ensureReady } = require('./db/setup');
 const { releaseIfDue } = require('./services/checkin');
+const { loadIfStale: loadSettingsIfStale } = require('./services/settings');
 
 const app = express();
 
@@ -36,7 +37,7 @@ app.use(helmet({
 }));
 // Staff access requests carry a letter of up to 3 MB (about 4 MB as base64). Vercel caps request
 // bodies at 4.5 MB. Every other route keeps a small limit.
-app.use('/api/access-requests', express.json({ limit: '4400kb' }));
+app.use(['/api/access-requests', '/api/access'], express.json({ limit: '4400kb' }));
 app.use(express.json({ limit: '20kb' }));
 app.use(cookieParser());
 
@@ -58,6 +59,7 @@ api.use(authenticate);
 api.use(requirePasswordChosen);
 // Free the rooms of bookings nobody checked in to, before anything reads them.
 api.use(async (req, res, next) => {
+  await loadSettingsIfStale();
   await releaseIfDue();
   next();
 });
@@ -68,6 +70,7 @@ api.use('/bookings', require('./routes/bookings'));
 api.use('/admin', require('./routes/admin'));
 api.use('/notifications', require('./routes/notifications'));
 api.use('/access-requests', require('./routes/access'));
+api.use('/access', require('./routes/access')); // the name used in the implementation guide
 api.use('/calendar', require('./routes/calendar').router);
 api.use('/door', require('./routes/door'));
 api.use(notFound);

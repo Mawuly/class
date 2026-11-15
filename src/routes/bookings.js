@@ -38,6 +38,11 @@ router.get('/mine', async (req, res) => {
   res.json({ bookings: await bookings.listMine(req.user, req.query.scope) });
 });
 
+// Leaving early: ends the booking now and frees the rest of the slot.
+router.post('/:id/check-out', async (req, res) => {
+  res.json({ booking: await bookings.checkOut(req.user, parseId(req.params.id, 'Booking'), { ip: req.ip }) });
+});
+
 router.post('/:id/cancel', async (req, res) => {
   const booking = await bookings.cancel(req.user, parseId(req.params.id, 'Booking'), { ip: req.ip });
   res.json({ booking });

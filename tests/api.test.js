@@ -384,7 +384,7 @@ describe('approval queue', () => {
     const approve = await admin.post(`/api/admin/bookings/${id}/approve`);
     assert.equal(approve.status, 409);
     assert.match(approve.body.error, /already passed/);
-    assert.equal((await admin.post(`/api/admin/bookings/${id}/reject`)).status, 200);
+    assert.equal((await admin.post(`/api/admin/bookings/${id}/reject`).send({ reason: 'Too late' })).status, 200);
   });
 });
 
@@ -476,14 +476,20 @@ describe('room management', () => {
     assert.equal((await db.get('SELECT is_active FROM rooms WHERE id = ?', [id])).is_active, true);
   });
 
-  test('a never-booked room can be deleted; a booked one must be deactivated instead', async () => {
+  test('a never-booked room is deleted; one with history is deactivated instead', async () => {
     const unused = await roomId('NAB-206');
     assert.equal((await admin.delete(`/api/admin/rooms/${unused}`)).status, 200);
     const used = await roomId('LT-2');
     await lecturer.post('/api/bookings').send({ roomId: used, title: 'X', category: 'lecture', date, start: '08:00', end: '09:00', attendees: 50 });
+    // Upcoming bookings: refused, the office must cancel them through deactivation first.
     const refused = await admin.delete(`/api/admin/rooms/${used}`);
     assert.equal(refused.status, 409);
-    assert.match(refused.body.error, /Deactivate it instead/);
+    assert.match(refused.body.error, /upcoming booking/);
+    // Only past history: "delete" deactivates it, so the history is kept.
+    await db.run("UPDATE bookings SET date = current_date - 2 WHERE room_id = ?", [used]);
+    const res = await admin.delete(`/api/admin/rooms/${used}`);
+    assert.deepEqual([res.status, res.body.deleted, res.body.deactivated], [200, false, true]);
+    assert.equal((await db.get('SELECT is_active FROM rooms WHERE id = ?', [used])).is_active, false);
   });
 
   test('a building can only be deleted once it is empty', async () => {
@@ -891,8 +897,8 @@ describe('statistics', () => {
 
   test('busiest hours split bookings across clock hours', async () => {
     const { body } = await get();
-    assert.equal(body.hours.length, 14);
-    assert.deepEqual(body.hours.map((h) => h.hour), [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    assert.equal(body.hours.length, 15); // 06:30–20:30 covers clock hours 6 to 20
+    assert.deepEqual(body.hours.map((h) => h.hour), [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
     const at = (h) => body.hours.find((x) => x.hour === h).hours;
     assert.equal(at(8), 1);      // LT-1 Mon 08–09
     assert.equal(at(9), 2.5);    // LT-1 Mon 09–10, LT-1 Wed 09–10, LT-2 09:30–10:00

@@ -169,6 +169,11 @@ async function door(rawCode, user) {
     ...(b.status === 'approved' && !b.checked_in_at ? { checkInBy: checkInState({ ...b, date }, now).deadline } : {}),
   });
   const current = rows.find((b) => b.start_time <= time);
+  const blocks = await db.all(
+    'SELECT start_time, end_time, reason FROM room_blocks WHERE room_id = ? AND date = ? AND end_time > ? ORDER BY start_time',
+    [room.id, date, time],
+  );
+  const closedNow = blocks.find((b) => b.start_time <= time);
 
   let mine = null;
   if (user) {
@@ -187,7 +192,7 @@ async function door(rawCode, user) {
   const startMin = Math.ceil(t.toMinutes(time) / slot) * slot;
   const start = t.fromMinutes(startMin);
   if (user && canBook(user, room) && start >= rules.open && start < rules.close) {
-    const nextTaken = rows.find((b) => b.end_time > start);
+    const nextTaken = [...rows, ...blocks].filter((b) => b.end_time > start).sort((a, b) => (a.start_time < b.start_time ? -1 : 1))[0];
     const blocked = nextTaken && nextTaken.start_time <= start;
     if (!blocked) {
       const limit = Math.min(
@@ -196,7 +201,8 @@ async function door(rawCode, user) {
         startMin + rules.maxHours * 60,
       );
       const ends = [];
-      for (let e = startMin + slot; e <= limit && ends.length < 8; e += slot) ends.push(t.fromMinutes(e));
+      // Bookings last whole hours.
+      for (let e = startMin + 60; e <= limit && ends.length < 8; e += 60) ends.push(t.fromMinutes(e));
       if (ends.length) book = { date, start, ends, needsApproval: user.role === 'student' };
     }
   }
@@ -209,6 +215,8 @@ async function door(rawCode, user) {
     },
     date, time, isOpen, open: rules.open, close: rules.close,
     current: shape(current) || null,
+    closed: closedNow ? { start: closedNow.start_time, end: closedNow.end_time, reason: closedNow.reason } : null,
+    closures: blocks.filter((b) => b !== closedNow).map((b) => ({ start: b.start_time, end: b.end_time, reason: b.reason })),
     upcoming: rows.filter((b) => b !== current).slice(0, 5).map(shape),
     mine,
     book,

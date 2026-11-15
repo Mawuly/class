@@ -61,7 +61,8 @@ function validateSlot({ date, start, end }, now = new Date()) {
   if (s % slotMinutes || e % slotMinutes) return `Times must be on ${slotMinutes}-minute boundaries`;
   if (e <= s) return 'End time must be after start time';
   if (s < toMinutes(open) || e > toMinutes(close)) return `Rooms can be booked between ${open} and ${close}`;
-  if (e - s > maxHours * 60) return `A booking can last at most ${maxHours} hours`;
+  if ((e - s) % 60) return 'Bookings last whole hours (1 h, 2 h, …)';
+  if (e - s > maxHours * 60) return `A booking can last at most ${maxHours} hour${maxHours === 1 ? '' : 's'}`;
 
   const today = localDate(now);
   if (date < today || (date === today && start < localTime(now))) return 'You cannot book a time in the past';

@@ -5,6 +5,7 @@ const { AppError } = require('../utils/errors');
 const t = require('../utils/time');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
+const { blockClashes } = require('./roomBlocks');
 
 const CATEGORIES = ['lecture', 'tutorial', 'lab', 'exam', 'meeting', 'study', 'event'];
 const STUDENT_CATEGORIES = ['study', 'meeting', 'event'];
@@ -15,7 +16,8 @@ const EXCLUSION_VIOLATION = '23P01'; // Postgres error code raised by the no-ove
 const BOOKING_COLUMNS = `
   b.id, b.room_id, r.code AS room_code, r.name AS room_name, bl.code AS building_code,
   b.user_id, b.title, b.category, b.course_code, b.date, b.start_time, b.end_time,
-  b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at, b.checked_in_at, b.released_at`;
+  b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at, b.checked_in_at, b.released_at,
+  b.supervisor, b.checked_out_at`;
 const BOOKING_FROM = 'bookings b JOIN rooms r ON r.id = b.room_id JOIN buildings bl ON bl.id = r.building_id';
 
 function str(v, max) {
@@ -62,8 +64,9 @@ async function userClashes(exec, userId, date, start, end) {
  */
 async function suggestSlot(exec, roomId, date, start, end, now = new Date()) {
   const taken = await exec.all(
-    `SELECT start_time, end_time FROM bookings WHERE room_id = ? AND date = ? AND status IN ${HOLDING}`,
-    [roomId, date],
+    `SELECT start_time, end_time FROM bookings WHERE room_id = ? AND date = ? AND status IN ${HOLDING}
+     UNION ALL SELECT start_time, end_time FROM room_blocks WHERE room_id = ? AND date = ?`,
+    [roomId, date, roomId, date],
   );
   const length = t.toMinutes(end) - t.toMinutes(start);
   const wanted = t.toMinutes(start);
@@ -87,10 +90,12 @@ function parseInput(input) {
     title: str(input.title, 120),
     category: str(input.category, 20),
     courseCode: str(input.courseCode, 20).toUpperCase() || null,
+    supervisor: str(input.supervisor, 120) || null,
     date: str(input.date, 10),
     start: str(input.start, 5),
     end: str(input.end, 5),
-    attendees: Number(input.attendees),
+    // Optional on the public site: one person unless said otherwise.
+    attendees: input.attendees == null || input.attendees === '' ? 1 : Number(input.attendees),
     notes: str(input.notes, 500) || null,
   };
 }
@@ -100,6 +105,8 @@ async function prepare(user, input) {
   const d = parseInput(input);
   if (!Number.isInteger(d.roomId)) throw new AppError(400, 'Choose a room');
   if (!d.title) throw new AppError(400, 'Give the booking a title');
+  // Category is optional: study for students, lecture for staff.
+  if (!d.category) d.category = user.role === 'student' ? 'study' : 'lecture';
   if (!CATEGORIES.includes(d.category)) throw new AppError(400, 'Choose a valid category');
   if (!Number.isInteger(d.attendees) || d.attendees < 1) throw new AppError(400, 'Attendees must be a whole number of at least 1');
 
@@ -135,6 +142,15 @@ async function create(user, input, { ip } = {}) {
         suggestion: await suggestSlot(x, d.roomId, d.date, d.start, d.end),
       });
     }
+    const closed = await blockClashes(x, d.roomId, d.date, d.start, d.end);
+    if (closed.length) {
+      const c = closed[0];
+      throw new AppError(409, `${room.code} is unavailable ${c.start_time}–${c.end_time}: ${c.reason}`, {
+        clash: 'unavailable',
+        conflicts: closed,
+        suggestion: await suggestSlot(x, d.roomId, d.date, d.start, d.end),
+      });
+    }
     const ownConflicts = await userClashes(x, user.id, d.date, d.start, d.end);
     if (ownConflicts.length) {
       const c = ownConflicts[0];
@@ -144,13 +160,17 @@ async function create(user, input, { ip } = {}) {
       });
     }
     const { rows } = await x.run(
-      `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      [d.roomId, user.id, d.title, d.category, d.courseCode, d.date, d.start, d.end, d.attendees, d.notes, status],
+      `INSERT INTO bookings (room_id, user_id, title, category, course_code, supervisor, date, start_time, end_time, attendees, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [d.roomId, user.id, d.title, d.category, d.courseCode, d.supervisor, d.date, d.start, d.end, d.attendees, d.notes, status],
     );
     await audit({ userId: user.id, action: 'booking.create', entity: 'booking', entityId: rows[0].id, details: { status }, ip }, x);
     return rows[0].id;
   }).catch((err) => {
+    if (err.code === EXCLUSION_VIOLATION && err.constraint === 'bookings_reject_room_blocks') {
+      throw new AppError(409, `${room.code} became unavailable at that time a moment ago. Please choose another time.`,
+        { clash: 'unavailable', conflicts: [] });
+    }
     if (err.code === EXCLUSION_VIOLATION) {
       const isRoom = err.constraint === 'bookings_no_room_overlap';
       throw new AppError(409, isRoom
@@ -192,6 +212,12 @@ async function planSeries(exec, user, d, room, dates) {
       const c = rc[0];
       plan.push({ date, ok: false, clash: 'room',
         reason: `${room.code} is taken ${c.start_time}–${c.end_time}${c.course_code ? ` by ${c.course_code}` : ''}` });
+      continue;
+    }
+    const closed = await blockClashes(exec, d.roomId, date, d.start, d.end);
+    if (closed.length) {
+      const c = closed[0];
+      plan.push({ date, ok: false, clash: 'unavailable', reason: `${room.code} is unavailable ${c.start_time}–${c.end_time}: ${c.reason}` });
       continue;
     }
     const uc = await userClashes(exec, user.id, date, d.start, d.end);
@@ -238,9 +264,9 @@ async function createSeries(user, input, { ip } = {}) {
       );
       for (const p of free) {
         await x.run(
-          `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, notes, status, series_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [d.roomId, user.id, d.title, d.category, d.courseCode, p.date, d.start, d.end, d.attendees, d.notes, status, series.id],
+          `INSERT INTO bookings (room_id, user_id, title, category, course_code, supervisor, date, start_time, end_time, attendees, notes, status, series_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [d.roomId, user.id, d.title, d.category, d.courseCode, d.supervisor, p.date, d.start, d.end, d.attendees, d.notes, status, series.id],
         );
       }
       await audit({ userId: user.id, action: 'series.create', entity: 'booking_series', entityId: series.id,
@@ -249,7 +275,7 @@ async function createSeries(user, input, { ip } = {}) {
     });
   } catch (err) {
     if (err.code === EXCLUSION_VIOLATION) {
-      throw new AppError(409, 'One of these weeks was booked by someone else a moment ago. Check the dates again.');
+      throw new AppError(409, 'One of these weeks was booked or closed a moment ago. Check the dates again.');
     }
     throw err;
   }
@@ -309,6 +335,32 @@ async function cancel(user, id, { ip } = {}) {
   return getBooking(id);
 }
 
+/**
+ * Leaving early: after checking in and after the start, the owner ends the booking now. The end
+ * moves to the current minute, so the rest of the slot is free straight away. It stays approved.
+ */
+async function checkOut(user, id, { ip } = {}) {
+  const b = await getBooking(id);
+  if (!b || b.user_id !== user.id) throw new AppError(404, 'Booking not found');
+  if (b.status !== 'approved') throw new AppError(409, `This booking is ${b.status === 'pending' ? 'not approved yet' : b.status}`);
+  if (!b.checked_in_at) throw new AppError(409, 'Check in first. You can check out after checking in.');
+  if (b.checked_out_at) throw new AppError(409, 'You have already checked out');
+  const now = new Date();
+  const today = t.localDate(now);
+  const time = t.localTime(now);
+  if (b.date !== today || time <= b.start_time) throw new AppError(409, `You can check out once the booking has started (${b.start_time})`);
+  if (time >= b.end_time) throw new AppError(409, 'This booking has already finished');
+  await db.tx(async (x) => {
+    await x.run(
+      `UPDATE bookings SET end_time = ?, checked_out_at = ?, updated_at = ? WHERE id = ? AND checked_out_at IS NULL`,
+      [time, now, now, id],
+    );
+    await audit({ userId: user.id, action: 'booking.check_out', entity: 'booking', entityId: id,
+      details: { planned_end: b.end_time, ended: time }, ip }, x);
+  });
+  return getBooking(id);
+}
+
 const REQUESTER_COLUMNS = `u.name AS user_name, u.email AS user_email, u.role AS user_role,
   u.department AS user_department, u.index_number AS user_index_number, r.capacity AS room_capacity`;
 
@@ -318,12 +370,13 @@ function hasEnded(b, now = new Date()) {
 }
 
 /** The approval queue: oldest-first by when the room is needed, so urgent requests are on top. */
-async function listByStatus(status = 'pending') {
+async function listByStatus(status = 'pending', { date } = {}) {
+  if (date && !t.isValidDate(date)) throw new AppError(400, 'Date must be a valid date (YYYY-MM-DD)');
   const rows = await db.all(
     `SELECT ${BOOKING_COLUMNS}, ${REQUESTER_COLUMNS}
      FROM ${BOOKING_FROM} JOIN users u ON u.id = b.user_id
-     WHERE b.status = ? ORDER BY b.date, b.start_time LIMIT 500`,
-    [status],
+     WHERE b.status = ? ${date ? 'AND b.date = ?' : ''} ORDER BY b.date, b.start_time LIMIT 500`,
+    date ? [status, date] : [status],
   );
   return rows.map((b) => ({ ...b, ended: hasEnded(b) }));
 }
@@ -365,6 +418,9 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
   const b = await getBooking(id);
   if (!b) throw new AppError(404, 'Booking not found');
   if (b.status !== 'pending') throw new AppError(409, `This booking is already ${b.status}`);
+  if (decision === 'rejected' && (!cleanReason || cleanReason.length < 3)) {
+    throw new AppError(400, 'Give a reason for the rejection, so the person knows why');
+  }
   if (decision === 'approved' && hasEnded(b)) {
     throw new AppError(409, 'The time for this request has already passed, so it can only be rejected');
   }
@@ -385,5 +441,5 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
 
 module.exports = {
   CATEGORIES, STUDENT_CATEGORIES, MAX_WEEKS, create, previewSeries, createSeries, cancelSeries, listMine, cancel, listByStatus, listDecided, requestContext,
-  decide, getBooking, suggestSlot,
+  decide, getBooking, suggestSlot, checkOut,
 };

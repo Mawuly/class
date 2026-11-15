@@ -159,7 +159,7 @@ describe('releasing no-shows', () => {
     const a = await signedIn('kofi@campus.test');
     const door = await a.get(`/api/door/${await doorCode('LIB-S1')}`);
     assert.equal(door.body.book.start, fromMinutes(slot));
-    assert.deepEqual(door.body.book.ends, [fromMinutes(slot + 30), fromMinutes(slot + 60)]);
+    assert.deepEqual(door.body.book.ends, [fromMinutes(slot + 60)]); // whole hours, up to the next booking
     assert.equal(door.body.book.needsApproval, true);
     assert.equal(door.body.upcoming[0].title, 'Seminar');
   }, { skip });

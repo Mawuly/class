@@ -220,6 +220,83 @@ ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
   CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'released'));
 CREATE INDEX IF NOT EXISTS idx_bookings_date_status ON bookings (date, status);
 
+-- Temporary closures (schema version 9). The timetable office closes a room for a time range on
+-- a date (maintenance, exams, events). The room stays active and is bookable again afterwards.
+-- Closures can't overlap each other (exclusion constraint), and the triggers below stop a
+-- closure and a pending/approved booking from overlapping, whichever is written first.
+CREATE TABLE IF NOT EXISTS room_blocks (
+  id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  room_id    integer     NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  date       date        NOT NULL,
+  start_time time        NOT NULL,
+  end_time   time        NOT NULL,
+  reason     text        NOT NULL CHECK (length(trim(reason)) BETWEEN 3 AND 300),
+  created_by integer     NOT NULL REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (start_time < end_time),
+  CONSTRAINT room_blocks_no_overlap EXCLUDE USING gist (
+    room_id WITH =,
+    tsrange(date + start_time, date + end_time) WITH &&
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_room_blocks_room_date ON room_blocks (room_id, date);
+ALTER TABLE room_blocks ENABLE ROW LEVEL SECURITY;
+
+-- Bookings and closures live in two tables, so no single constraint covers both. Each write
+-- first takes a lock on its room (held until the transaction ends), so a booking and a closure
+-- written at the same moment are checked one after the other, never side by side.
+CREATE OR REPLACE FUNCTION lock_room_for_schedule() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(72710002, NEW.room_id);
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION bookings_reject_room_blocks_fn() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status IN ('pending', 'approved') AND EXISTS (
+    SELECT 1 FROM room_blocks rb
+    WHERE rb.room_id = NEW.room_id AND rb.date = NEW.date
+      AND rb.start_time < NEW.end_time AND rb.end_time > NEW.start_time
+  ) THEN
+    RAISE EXCEPTION 'The room is unavailable at that time'
+      USING ERRCODE = 'exclusion_violation', CONSTRAINT = 'bookings_reject_room_blocks';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION room_blocks_reject_bookings_fn() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM bookings b
+    WHERE b.room_id = NEW.room_id AND b.date = NEW.date AND b.status IN ('pending', 'approved')
+      AND b.start_time < NEW.end_time AND b.end_time > NEW.start_time
+  ) THEN
+    RAISE EXCEPTION 'The room has a booking at that time'
+      USING ERRCODE = 'exclusion_violation', CONSTRAINT = 'room_blocks_reject_bookings';
+  END IF;
+  RETURN NEW;
+END $$;
+
+-- Trigger names sort alphabetically within a table: the lock ("..._lock_room") must run before
+-- the check ("..._reject_..."), and "l" comes before "r".
+DROP TRIGGER IF EXISTS bookings_lock_room ON bookings;
+CREATE TRIGGER bookings_lock_room BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time, status ON bookings
+  FOR EACH ROW EXECUTE FUNCTION lock_room_for_schedule();
+DROP TRIGGER IF EXISTS bookings_reject_room_blocks ON bookings;
+CREATE TRIGGER bookings_reject_room_blocks BEFORE INSERT OR UPDATE OF room_id, date, start_time, end_time, status ON bookings
+  FOR EACH ROW EXECUTE FUNCTION bookings_reject_room_blocks_fn();
+DROP TRIGGER IF EXISTS room_blocks_lock_room ON room_blocks;
+CREATE TRIGGER room_blocks_lock_room BEFORE INSERT OR UPDATE ON room_blocks
+  FOR EACH ROW EXECUTE FUNCTION lock_room_for_schedule();
+DROP TRIGGER IF EXISTS room_blocks_reject_bookings ON room_blocks;
+CREATE TRIGGER room_blocks_reject_bookings BEFORE INSERT OR UPDATE ON room_blocks
+  FOR EACH ROW EXECUTE FUNCTION room_blocks_reject_bookings_fn();
+
+-- Course code and/or supervisor on a request (schema version 11), and check-out (schema
+-- version 12): leaving early moves end_time to the minute you left, so the rest is free again.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS supervisor     text;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_out_at timestamptz;
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,
@@ -227,6 +304,9 @@ CREATE TABLE IF NOT EXISTS app_meta (
 );
 -- The day check-in started, so statistics don't count older bookings as missed check-ins.
 INSERT INTO app_meta (key, value) VALUES ('checkin_since', to_char(current_date, 'YYYY-MM-DD')) ON CONFLICT (key) DO NOTHING;
+-- The booking window (schema version 10), edited on /admin -> Settings. Applies to every room.
+INSERT INTO app_meta (key, value) VALUES ('booking_open', '06:30'), ('booking_close', '20:30'), ('booking_max_hours', '4')
+  ON CONFLICT (key) DO NOTHING;
 
 -- Supabase publishes every table in the public schema through its REST API using the public
 -- "anon" key. Row Level Security with no policies closes that door: only this server, which
@@ -242,3 +322,4 @@ ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_meta       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE phone_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_blocks    ENABLE ROW LEVEL SECURITY;

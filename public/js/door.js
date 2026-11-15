@@ -25,6 +25,9 @@ const duration = (start, end) => {
 
 /* ---------- Now: free, in use, waiting for check-in, closed ----------------------------- */
 
+/** When the next booking or closure starts, if any. */
+const freeUntil = (d) => [d.upcoming[0]?.start, d.closures?.[0]?.start].filter(Boolean).sort()[0] || null;
+
 function statusCard(d) {
   const c = d.current;
   const next = d.upcoming[0];
@@ -33,10 +36,16 @@ function statusCard(d) {
       h('p', { class: 'door-status__word serif' }, 'Closed'),
       h('p', {}, `Rooms are open for booking ${d.open}–${d.close}.`));
   }
+  if (d.closed) {
+    return h('section', { class: 'door-status door-status--closed' },
+      h('p', { class: 'door-status__word serif' }, 'Unavailable'),
+      h('p', { class: 'mono' }, `until ${d.closed.end}`),
+      h('p', {}, d.closed.reason));
+  }
   if (!c) {
     return h('section', { class: 'door-status door-status--free' },
       h('p', { class: 'door-status__word serif' }, 'Free'),
-      h('p', { class: 'mono' }, next ? `until ${next.start}` : `for the rest of the day (until ${d.close})`));
+      h('p', { class: 'mono' }, freeUntil(d) ? `until ${freeUntil(d)}` : `for the rest of the day (until ${d.close})`));
   }
   const what = c.title ? `${c.title}${c.courseCode ? ` · ${c.courseCode}` : ''}` : '';
   if (c.status === 'approved' && !c.checkedIn && d.checkIn.release) {
@@ -161,13 +170,19 @@ function bookCard(d) {
 /* ---------- Later today ------------------------------------------------------------- */
 
 function laterList(d) {
-  if (!d.upcoming.length) return '';
-  return h('section', { class: 'door-later' },
-    h('h2', { class: 'panel__title' }, 'Later today'),
-    h('ul', { class: 'door-later__list' }, d.upcoming.map((b) => h('li', { class: `door-later__item${b.mine ? ' is-mine' : ''}` },
+  const items = [
+    ...d.upcoming.map((b) => ({ start: b.start, el: h('li', { class: `door-later__item${b.mine ? ' is-mine' : ''}` },
       h('span', { class: 'mono' }, `${b.start}–${b.end}`),
       h('span', {}, b.title ? `${b.title}${b.courseCode ? ` · ${b.courseCode}` : ''}` : 'Booked', b.mine ? ' (yours)' : ''),
-      b.status === 'pending' ? h('span', { class: 'tag tag--pending' }, 'requested') : ''))));
+      b.status === 'pending' ? h('span', { class: 'tag tag--pending' }, 'requested') : '') })),
+    ...(d.closures || []).map((c) => ({ start: c.start, el: h('li', { class: 'door-later__item' },
+      h('span', { class: 'mono' }, `${c.start}–${c.end}`),
+      h('span', {}, `Unavailable · ${c.reason}`)) })),
+  ].sort((a, b) => (a.start < b.start ? -1 : 1));
+  if (!items.length) return '';
+  return h('section', { class: 'door-later' },
+    h('h2', { class: 'panel__title' }, 'Later today'),
+    h('ul', { class: 'door-later__list' }, items.map((i) => i.el)));
 }
 
 /* ---------- Page ------------------------------------------------------------------- */

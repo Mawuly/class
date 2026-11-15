@@ -25,7 +25,13 @@ const slot = (date, start, end) => t.validateSlot({ date, start, end }, NOW);
 
 test('validateSlot accepts a normal future slot', () => {
   assert.equal(slot('2026-11-14', '08:30', '10:30'), null);
-  assert.equal(slot('2026-11-13', '09:30', '10:00'), null);
+  assert.equal(slot('2026-11-13', '09:30', '10:30'), null);
+});
+
+test('validateSlot: starts every half hour, lasts whole hours', () => {
+  assert.match(slot('2026-11-14', '08:00', '08:30'), /whole hours/);
+  assert.match(slot('2026-11-14', '08:30', '10:00'), /whole hours/);
+  assert.equal(slot('2026-11-14', '08:30', '09:30'), null);
 });
 
 test('validateSlot rejects malformed input', () => {
@@ -39,11 +45,11 @@ test('validateSlot enforces 30-minute boundaries', () => {
   assert.match(slot('2026-11-14', '08:15', '09:00'), /30-minute/);
 });
 
-test('validateSlot enforces opening hours 07:00–21:00', () => {
-  assert.match(slot('2026-11-14', '06:30', '08:00'), /between 07:00 and 21:00/);
-  assert.match(slot('2026-11-14', '20:00', '21:30'), /between 07:00 and 21:00/);
-  assert.equal(slot('2026-11-14', '07:00', '08:00'), null);
-  assert.equal(slot('2026-11-14', '20:00', '21:00'), null);
+test('validateSlot enforces the default opening hours 06:30–20:30', () => {
+  assert.match(slot('2026-11-14', '06:00', '07:00'), /between 06:30 and 20:30/);
+  assert.match(slot('2026-11-14', '20:00', '21:00'), /between 06:30 and 20:30/);
+  assert.equal(slot('2026-11-14', '06:30', '07:30'), null);
+  assert.equal(slot('2026-11-14', '19:30', '20:30'), null);
 });
 
 test('validateSlot rejects end before start and zero length', () => {
@@ -51,9 +57,9 @@ test('validateSlot rejects end before start and zero length', () => {
   assert.match(slot('2026-11-14', '10:00', '10:00'), /after start/);
 });
 
-test('validateSlot caps a booking at 6 hours', () => {
-  assert.equal(slot('2026-11-14', '08:00', '14:00'), null);
-  assert.match(slot('2026-11-14', '08:00', '14:30'), /at most 6 hours/);
+test('validateSlot caps a booking at the longest class (default 4 hours)', () => {
+  assert.equal(slot('2026-11-14', '08:00', '12:00'), null);
+  assert.match(slot('2026-11-14', '08:00', '13:00'), /at most 4 hours/);
 });
 
 test('validateSlot rejects the past', () => {

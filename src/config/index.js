@@ -102,11 +102,12 @@ module.exports = {
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,
   authRateLimit: { windowMs: 15 * 60 * 1000, max: isTest ? 10000 : 10 },
+  // Defaults for the booking window; the live values come from /admin → Settings (app_meta).
   booking: {
-    open: '07:00',
-    close: '21:00',
-    slotMinutes: 30,
-    maxHours: 6,
+    open: '06:30',
+    close: '20:30',
+    slotMinutes: 30,   // start times every 30 minutes
+    maxHours: 4,       // bookings last whole hours, up to this many
     maxDaysAhead: 150,
     // Check-in at the door: from this many minutes before the start...
     checkInEarlyMinutes: 10,

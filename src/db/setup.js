@@ -15,7 +15,9 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   3: password reset columns on users   4: append-only audit log, audit indexes
 //   5: calendar subscription token on users   6: password_resets (emailed codes)
 //   7: phone numbers and text-message codes   8: door codes, check-in, released bookings
-const SCHEMA_VERSION = 8;
+//   9: room_blocks (temporary closures) and the triggers that keep them apart from bookings
+//   10: booking window in app_meta   11: bookings.supervisor   12: bookings.checked_out_at
+const SCHEMA_VERSION = 12;
 
 let ready = null;
 
