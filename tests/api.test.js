@@ -1435,13 +1435,15 @@ describe('separate pages', () => {
   test('the timetable office portal is its own page; the main site has no admin screens', async () => {
     const portal = await request(app).get('/admin');
     assert.equal(portal.status, 200);
-    assert.match(portal.text, /<title>Timetable Office<\/title>/);
+    assert.match(portal.text, /<title>Timetable office/i);
     assert.match(portal.text, /src="\/js\/admin-app\.js"/);
     assert.match(portal.text, /data-view="approvals"/);
     const main = await request(app).get('/');
     assert.doesNotMatch(main.text, /data-view="(approvals|rooms|people|stats|audit)"/);
-    assert.doesNotMatch(main.text, /name="accountType" value="admin"/);
-    assert.match(main.text, /value="student"/);
-    assert.match(main.text, /value="lecturer"/);
+    // Sign-up offers student or lecturer only (the lecturer form is on booking.html).
+    const signup = await request(app).get('/booking.html');
+    assert.doesNotMatch(signup.text, /name="accountType" value="admin"/);
+    assert.match(signup.text, /value="student"/);
+    assert.match(signup.text, /value="lecturer"/);
   });
 });

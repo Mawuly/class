@@ -260,6 +260,10 @@ function buildingList() {
 
 function renderBuildings() {
   const list = buildingList();
+  // Counted from the rooms the server sends, so they follow what the timetable office has set up.
+  const pad = (n) => String(n).padStart(2, '0');
+  $('rooms-stat').textContent = state.rooms.length ? String(state.rooms.length) : '—';
+  $('buildings-stat').textContent = list.length ? pad(list.length) : '—';
   const cards = list.map((b) => {
     const c = button('', `building-card${state.building === b.code ? ' active' : ''}`, () => {
       state.building = state.building === b.code ? '' : b.code;

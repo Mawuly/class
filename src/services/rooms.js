@@ -244,7 +244,8 @@ async function publicRooms({ date } = {}, at = new Date()) {
     rooms: rooms.map((r) => {
       const periods = freePeriods(byRoom.get(r.id) || [], from, rules.close);
       const { building_id: _b, ...room } = shapeRoom(r);
-      return { ...room, freePeriods: periods, firstFree: periods[0] || null };
+      // `free` is what the public site reads; `firstFree` is the name in the implementation guide.
+      return { ...room, freePeriods: periods, firstFree: periods[0] || null, free: periods[0] || null };
     }),
   };
 }
