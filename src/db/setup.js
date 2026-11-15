@@ -13,8 +13,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   1: first release   2: access_requests (staff verification) and app_meta
 //   3: password reset columns on users   4: append-only audit log, audit indexes
 //   5: calendar subscription token on users   6: password_resets (emailed codes)
-//   7: phone numbers and text-message codes
-const SCHEMA_VERSION = 7;
+//   7: phone numbers and text-message codes   8: door codes, check-in, released bookings
+const SCHEMA_VERSION = 8;
 
 let ready = null;
 

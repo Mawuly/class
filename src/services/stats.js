@@ -123,6 +123,7 @@ async function overview(query) {
     ),
   ]);
 
+  const attendance = await attendanceFor(range, bFilter, bArg);
   const perRoomAvailable = current.teachingDays * openMins;
   return {
     range: { ...range, teachingDays: current.teachingDays, open: rules.open, close: rules.close },
@@ -144,6 +145,40 @@ async function overview(query) {
     })),
     hours: hours.map((h) => ({ hour: h.hour, hours: Math.round((h.minutes / 60) * 10) / 10 })),
     categories: categories.map((c) => ({ ...c, hours: Math.round((c.minutes / 60) * 10) / 10 })),
+    attendance,
+  };
+}
+
+/**
+ * Check-in for bookings whose check-in time is over: how many were checked in, released
+ * (nobody came, the room was freed) or missed (ended without check-in, e.g. approved late or
+ * with releasing turned off). Only counts bookings from the day check-in started.
+ */
+async function attendanceFor(range, bFilter, bArg) {
+  const since = (await db.get("SELECT value FROM app_meta WHERE key = 'checkin_since'"))?.value || range.from;
+  const now = new Date();
+  const today = t.localDate(now);
+  const graceAgo = t.localTime(new Date(now.getTime() - rules.checkInGraceMinutes * 60_000));
+  const from = range.from > since ? range.from : since;
+  const row = await db.get(
+    `SELECT count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in,
+            count(*) FILTER (WHERE b.status = 'released')::int AS released,
+            count(*) FILTER (WHERE b.status = 'approved' AND b.checked_in_at IS NULL)::int AS missed
+     FROM bookings b JOIN rooms r ON r.id = b.room_id
+     WHERE b.status IN ('approved', 'released') AND b.date BETWEEN ? AND ?
+       AND (b.checked_in_at IS NOT NULL OR b.date < ? OR (b.date = ? AND b.start_time <= ?)) ${bFilter}`,
+    [from, range.to, today, today, graceAgo, ...bArg],
+  );
+  const total = row.checked_in + row.released + row.missed;
+  return {
+    since,
+    graceMinutes: rules.checkInGraceMinutes,
+    releasing: rules.releaseNoShows,
+    total,
+    checkedIn: row.checked_in,
+    released: row.released,
+    missed: row.missed,
+    rate: total ? row.checked_in / total : null,
   };
 }
 

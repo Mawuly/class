@@ -105,5 +105,11 @@ module.exports = {
     slotMinutes: 30,
     maxHours: 6,
     maxDaysAhead: 150,
+    // Check-in at the door: from this many minutes before the start...
+    checkInEarlyMinutes: 10,
+    // ...until this many minutes after it. Then an approved booking nobody checked in to is
+    // released and the room becomes free. CHECKIN_RELEASE=off keeps check-in but never releases.
+    checkInGraceMinutes: Math.min(60, Math.max(5, Number(process.env.CHECKIN_GRACE_MINUTES) || 15)),
+    releaseNoShows: !/^(0|off|false|no)$/i.test(process.env.CHECKIN_RELEASE || ''),
   },
 };

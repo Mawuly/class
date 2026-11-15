@@ -29,7 +29,7 @@ function roomRow(room) {
   const who = room.bookable_by === 'staff' ? 'Staff only' : 'Everyone';
   return h('div', { class: `rt-row${room.is_active ? '' : ' rt-row--inactive'}`, role: 'row' },
     h('span', { class: 'rt-code mono', role: 'cell' },
-      room.is_active ? h('a', { href: `#/room/${room.id}`, title: `See ${room.code}'s week` }, room.code) : room.code),
+      room.is_active ? h('a', { href: `/#/room/${room.id}`, title: `See ${room.code}'s week on the main site` }, room.code) : room.code),
     h('span', { class: 'rt-name', role: 'cell' }, room.name,
       room.is_active ? null : h('span', { class: 'tag tag--cancelled' }, 'inactive')),
     h('span', { class: 'rt-type', role: 'cell' }, TYPE_LABEL[room.type] || room.type),
@@ -39,6 +39,7 @@ function roomRow(room) {
     h('span', { class: 'rt-who', role: 'cell' }, who),
     h('span', { class: 'rt-up mono', role: 'cell', title: 'Upcoming bookings' }, room.upcoming || ''),
     h('span', { class: 'rt-act', role: 'cell' },
+      room.is_active ? h('a', { class: 'link-button', href: `/door-signs?room=${room.id}`, 'aria-label': `Door sign for ${room.code}` }, 'Sign') : '',
       h('button', { class: 'link-button', type: 'button', 'aria-label': `Edit ${room.code}`, onclick: () => openRoom(room) }, 'Edit')));
 }
 
@@ -244,6 +245,23 @@ function openRoom(room, buildingId) {
     const status = room.is_active
       ? `Active · ${room.upcoming} upcoming booking${room.upcoming === 1 ? '' : 's'} · ${room.total_bookings} on record`
       : `Inactive · hidden from searches and the board · ${room.total_bookings} booking${room.total_bookings === 1 ? '' : 's'} on record`;
+    if (room.is_active) {
+      const shown = h('span', { class: 'mono door-code' }, `${room.door_code.slice(0, 3)}-${room.door_code.slice(3)}`);
+      parts.push(h('section', { class: 'danger' },
+        h('h3', { class: 'panel__title' }, 'Door sign'),
+        h('p', { class: 'danger__status' }, 'Door code ', shown,
+          '. People scan the QR code on the sign, or type this code, to check in.'),
+        h('div', { class: 'sheet__actions' },
+          h('a', { class: 'button button--secondary', href: `/door-signs?room=${room.id}` }, 'Print sign'),
+          confirmButton('New code', 'Old sign stops working. Click again', async () => {
+            try {
+              const res = await api(`/admin/rooms/${room.id}/door-code`, { method: 'POST' });
+              room.door_code = res.room.door_code;
+              shown.textContent = `${room.door_code.slice(0, 3)}-${room.door_code.slice(3)}`;
+              await changed();
+            } catch (err) { showError(form, err.message); }
+          }))));
+    }
     parts.push(h('section', { class: 'danger' },
       h('h3', { class: 'panel__title' }, 'Availability'),
       h('p', { class: 'danger__status' }, status),

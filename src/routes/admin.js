@@ -9,11 +9,16 @@ const auditLog = require('../services/audit');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
+const QRCode = require('qrcode');
+const config = require('../config');
+const db = require('../db');
+const checkin = require('../services/checkin');
+const { baseUrl } = require('./calendar');
 
 const router = express.Router();
 router.use(requireRole('admin'));
 
-const STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
+const STATUSES = ['pending', 'approved', 'rejected', 'cancelled', 'released'];
 
 // ?status=pending (the queue), approved / rejected / cancelled, or "decided" (recent decisions).
 router.get('/bookings', async (req, res) => {
@@ -125,6 +130,42 @@ router.get('/audit.csv', async (req, res) => {
     'Content-Disposition': `attachment; filename="audit-log_${new Date().toISOString().slice(0, 10)}.csv"`,
   });
   res.send(await auditLog.csv(req.query));
+});
+
+/* ---------- Door signs: QR codes for check-in ----------------------------------------- */
+
+const doorUrl = (req, code) => `${baseUrl(req)}/door?c=${code}`;
+
+// Every active room's sign (or one room's with ?room=ID), for the printable signs page.
+router.get('/door-signs', async (req, res) => {
+  const one = req.query.room ? parseId(req.query.room, 'Room') : null;
+  const rooms = await db.all(
+    `SELECT r.id, r.code, r.name, r.capacity, r.door_code, bl.code AS building_code, bl.name AS building_name
+     FROM rooms r JOIN buildings bl ON bl.id = r.building_id
+     WHERE r.is_active ${one ? 'AND r.id = ?' : ''} ORDER BY bl.code, r.code`,
+    one ? [one] : [],
+  );
+  if (one && !rooms.length) throw new AppError(404, 'Room not found');
+  const { checkInEarlyMinutes, checkInGraceMinutes, releaseNoShows } = config.booking;
+  res.json({
+    signs: rooms.map((r) => ({ ...r, url: doorUrl(req, r.door_code) })),
+    checkIn: { earlyMinutes: checkInEarlyMinutes, graceMinutes: checkInGraceMinutes, release: releaseNoShows },
+  });
+});
+
+// The QR code itself, as an image the signs page can show and print.
+router.get('/rooms/:id/door-qr.svg', async (req, res) => {
+  const room = await db.get('SELECT door_code FROM rooms WHERE id = ?', [parseId(req.params.id, 'Room')]);
+  if (!room) throw new AppError(404, 'Room not found');
+  const svg = await QRCode.toString(doorUrl(req, room.door_code), {
+    type: 'svg', errorCorrectionLevel: 'M', margin: 2, color: { dark: '#12161C', light: '#ffffff00' }, // clear background: prints on paper, shows on Bone
+  });
+  res.type('image/svg+xml').set('Cache-Control', 'private, no-store').send(svg);
+});
+
+// A new code when a sign is lost or someone shared a photo of it; the old code stops working.
+router.post('/rooms/:id/door-code', async (req, res) => {
+  res.json({ room: await checkin.newDoorCode(req.user, parseId(req.params.id, 'Room'), { ip: req.ip }) });
 });
 
 module.exports = router;

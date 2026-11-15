@@ -13,6 +13,7 @@ Every feature in the project plan is built.
 - Day board (every room against one day's hours) and room week view, both bookable by click, drag or keyboard
 - Weekly bookings for staff: 2–16 weeks, every week checked first, clashing weeks skipped on request, all in one transaction
 - Rules: 07:00–21:00, 30-minute slots, at most 6 hours, up to 150 days ahead, capacity; students request study, seminar and meeting rooms and wait for approval
+- Check-in at the door: every room has a printed sign with a QR code and a six-character door code. Scanning it opens the room's door page (`/door?c=CODE`): whether the room is free, in use or waiting for check-in, a one-tap **Check in**, and booking it from the next half hour. Without a camera, people type the code under **Check in** on their dashboard. Check-in opens 10 minutes before the start; an approved booking nobody checks in to within 15 minutes is released, the room becomes free, and the person is told why
 - Calendar export: an .ics file, or a private subscription link for Google Calendar, Outlook or Apple Calendar that stays up to date
 - "Campus Now" landing page with live room counts; dashboard with your next booking, Coming up and notifications
 
@@ -21,6 +22,7 @@ Every feature in the project plan is built.
 - Approvals inbox for room requests and staff access requests, with keyboard shortcuts (A / R) and reasons
 - Rooms and buildings: add, edit, deactivate (upcoming bookings cancelled and people told), delete if never booked
 - People: change roles, correct details, deactivate accounts, reset passwords
+- Door signs: print one sign per room (or all at once) from Rooms → **Print door signs**; **New code** on a room replaces a lost or photographed sign
 - Statistics: utilisation, busiest hours, purposes, per-room use with plain-language notes; table views and CSV
 - Audit log: every action as a sentence, filters, a failed-sign-in warning, CSV export
 
@@ -98,6 +100,8 @@ Optional settings (Vercel → Settings → Environment Variables):
 | Name | What it does |
 |---|---|
 | `SEED_DEMO` | `true` adds demo lecturers, a demo student (`student@campus.test` / `Campus2026`) and sample bookings to an empty database. No demo admin is ever created on a deployment. |
+| `CHECKIN_GRACE_MINUTES` | Minutes after the start a booking can be checked in to before it is released (5–60, default 15). |
+| `CHECKIN_RELEASE` | `off` keeps check-in but never releases bookings (useful while signs are being put up). |
 | `ALLOWED_EMAIL_DOMAIN` | e.g. `ug.edu.gh`: only addresses at that domain can register. |
 | `JWT_SECRET` | A long random string for signing logins. Optional: without it, one is derived from the database connection string. |
 

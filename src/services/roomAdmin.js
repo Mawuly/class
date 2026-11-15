@@ -100,7 +100,7 @@ async function overview() {
   );
   const rooms = await db.all(
     `SELECT r.id, r.building_id, bl.code AS building_code, bl.name AS building_name, r.code, r.name, r.type,
-            r.capacity, r.floor, r.facilities, r.bookable_by, r.is_active,
+            r.capacity, r.floor, r.facilities, r.bookable_by, r.is_active, r.door_code,
             count(b.id)::int AS total_bookings,
             count(b.id) FILTER (WHERE b.status IN ${HOLDING}
               AND (b.date > ? OR (b.date = ? AND b.end_time > ?)))::int AS upcoming

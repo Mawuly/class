@@ -59,6 +59,8 @@ function describe(e) {
     'user.promote_admin': ['became an admin', 'listed in ADMIN_EMAILS'],
     'booking.create': [`booked ${booking}`, d.status === 'pending' ? 'request, awaiting approval' : ''],
     'booking.cancel': [`cancelled ${owner || 'their '}booking for ${booking}`],
+    'booking.check_in': [`checked in to ${owner || 'their '}booking for ${booking}`, d.via === 'qr' ? 'scanned the door QR code' : 'typed the door code'],
+    'room.new_door_code': [`replaced the door code of ${e.target_room || 'a room'}`, 'the old sign stopped working'],
     'booking.approve': [`approved ${owner}request for ${booking}`],
     'booking.reject': [`rejected ${owner}request for ${booking}`, d.reason ? `“${d.reason}”` : ''],
     'series.create': [`booked ${d.weeks || ''} weeks in ${e.target_room || d.room || 'a room'}`.replace('  ', ' '),
@@ -88,6 +90,11 @@ function describe(e) {
     return e.actor_name
       ? { who: e.actor_name, summary: `${what} to ${e.actor_name}'s account`, detail: '' }
       : { who: 'Unknown', summary: `${what} for an unknown email`, detail: d.email ? `tried ${d.email}` : '' };
+  }
+  // Releases are done by the system, not a person.
+  if (e.action === 'booking.release') {
+    const whose = e.target_owner_name ? `${e.target_owner_name}'s booking` : 'A booking';
+    return { who: 'System', summary: `${whose} for ${booking} was released`, detail: d.by ? `nobody checked in by ${d.by}` : 'nobody checked in' };
   }
   return { who, summary: `${who} ${S[0]}`, detail: S[1] || '' };
 }

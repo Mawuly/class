@@ -997,7 +997,7 @@ kbd {
 .stats.is-loading { opacity: .5; }
 
 .kpis {
-  display: grid; grid-template-columns: minmax(240px, 1.5fr) repeat(4, minmax(150px, 1fr));
+  display: grid; grid-template-columns: minmax(240px, 1.5fr) repeat(5, minmax(140px, 1fr));
   border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--ink); overflow: hidden;
 }
 .kpi { padding: 18px 20px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 6px; }
@@ -1221,3 +1221,131 @@ kbd {
 .topbar__link--portal { color: var(--text-strong); }
 .access-banner__aside { color: var(--text-muted); }
 .is-portal .landing--single { min-height: calc(100dvh - 90px); }
+
+/* ---------- Check-in (dashboard) ------------------------------------------------------ */
+
+.tag--released { color: var(--text-muted); border: 1px dotted rgb(var(--bone-rgb) / 0.6); }
+.row--released .row__title { opacity: .55; }
+.checkin {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; font-size: 13px; color: var(--text);
+}
+.checkin b { color: var(--text-strong); font-weight: 500; }
+.checkin--open .button { min-width: 120px; }
+.checkin--done { color: var(--text-strong); }
+.checkin__mark {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bone); color: var(--ink); font-size: 12px; font-weight: 600;
+}
+.sheet__lead { font-family: var(--mono); font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+.door-code { color: var(--text-strong); letter-spacing: .12em; }
+
+/* ---------- Door page (/door?c=CODE): made for a phone held at a door --------------------- */
+
+.is-door .stage__fallback { opacity: .5; }
+.door-top { position: static; }
+.door {
+  width: min(560px, 100%); margin: 0 auto; padding: 8px var(--gutter) 48px;
+  display: grid; gap: 14px; animation: rise .4s var(--ease) both;
+}
+.door__loading { padding: 40px 0; text-align: center; }
+.door__head { padding: 6px 0 4px; }
+.door__code { font-size: clamp(52px, 16vw, 84px); line-height: .95; letter-spacing: -0.02em; color: var(--text-strong); font-weight: 500; }
+.door__where { margin-top: 8px; color: var(--text); font-size: 14px; }
+.door__doorcode { margin-top: 4px; font-size: 11px; letter-spacing: .12em; color: var(--text-muted); text-transform: uppercase; }
+.door__missing { font-size: 26px; line-height: 1.2; margin-bottom: 8px; }
+.door__flash {
+  padding: 12px 14px; border-radius: var(--r-input); background: var(--bone); color: var(--ink); font-weight: 500;
+}
+.door__foot { margin-top: 6px; font-size: 13px; color: var(--text-muted); text-align: center; }
+.door__foot a { color: var(--text); text-underline-offset: 3px; }
+.door__big { width: 100%; min-height: 54px; font-size: 17px; display: inline-grid; place-items: center; text-decoration: none; }
+
+/* The room's state at a glance: fill = free, line = in use, hatch = waiting for check-in. */
+.door-status { padding: 20px 22px; border-radius: var(--r-panel); border: 1px solid var(--line); display: grid; gap: 4px; }
+.door-status p { font-size: 14px; }
+.door-status .door-status__word { font-size: clamp(40px, 12vw, 56px); line-height: 1; letter-spacing: -0.01em; margin-bottom: 6px; }
+.door-status--free { background: var(--bone); color: var(--ink); border-color: var(--bone); }
+.door-status--free .door-status__word { color: var(--ink); }
+.door-status--busy { background: var(--ink); border: 2px solid var(--bone); color: var(--text); }
+.door-status--busy .door-status__word { color: var(--text-strong); }
+.door-status--waiting {
+  border: 2px dashed rgb(var(--bone-rgb) / 0.7); color: var(--text);
+  background: repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.12) 0 3px, transparent 3px 10px), var(--ink);
+}
+.door-status--waiting .door-status__word, .door-status b { color: var(--text-strong); font-weight: 500; }
+.door-status--closed { background: var(--ink); color: var(--text-muted); }
+.door-status--closed .door-status__word { color: var(--text-muted); }
+
+.door-card { display: grid; gap: 10px; background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.door-card__label { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+.door-card__title { color: var(--text-strong); font-size: 16px; }
+.door-card--action { border-color: var(--bone); }
+.door-card__ok { color: var(--text-strong); font-weight: 500; }
+.door-card--lost { border-style: dotted; }
+.door-card b { color: var(--text-strong); font-weight: 500; }
+
+.door-book { display: grid; gap: 12px; background: var(--ink); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.door-book__row { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 12px; }
+.door-book .button--primary { min-height: 48px; }
+
+.door-later__list { display: grid; margin: 8px 0 0; padding: 0; list-style: none; }
+.door-later__item {
+  display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--text);
+}
+.door-later__item.is-mine { color: var(--text-strong); }
+.door-later__item .mono { color: var(--text-strong); font-size: 13px; }
+.door-later .panel__title { margin-top: 8px; }
+
+/* ---------- Printable door signs (/door-signs) ----------------------------------------- */
+
+.signs-top .topbar__nav { align-items: center; }
+.signs-page { padding: 24px var(--gutter) 60px; }
+.signs-intro { max-width: 640px; margin-bottom: 24px; display: grid; gap: 8px; }
+.signs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+/* On screen, signs look like paper so the office sees what will print. */
+.sign {
+  background: var(--bone); color: var(--ink); border-radius: 10px; padding: 28px 24px;
+  display: grid; justify-items: center; text-align: center; gap: 8px;
+}
+.sign .sign__brand, .sign .sign__code { color: var(--ink); }
+.sign__brand { font-size: 14px; letter-spacing: .02em; }
+.sign__code { font-size: 54px; line-height: 1; font-weight: 500; letter-spacing: -0.01em; margin-top: 4px; }
+.sign__name { font-size: 13px; }
+.sign__qr { width: 220px; height: 220px; margin: 8px 0 4px; image-rendering: pixelated; }
+.sign__scan { font-size: 18px; font-weight: 600; }
+.sign__alt { font-size: 12px; max-width: 30ch; }
+.sign__doorcode {
+  display: block; margin: 8px auto 0; padding: 6px 12px; width: max-content;
+  border: 2px solid var(--ink); border-radius: 6px; font-size: 22px; letter-spacing: .18em; font-weight: 600;
+}
+.sign__rule { font-size: 11px; max-width: 34ch; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--ink); }
+.sign__url { font-size: 9px; opacity: .7; word-break: break-all; }
+
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+  html, body, .is-signs { background: #FFFFFF !important; color: #12161C; }
+  .is-signs .stage, .signs-top, .signs-intro { display: none !important; }
+  .signs-page { padding: 0; }
+  .signs { display: block; }
+  .sign {
+    background: #FFFFFF; break-after: page; break-inside: avoid; border: 0; border-radius: 0; padding: 18mm 10mm;
+    min-height: 250mm; align-content: center; gap: 4mm;
+  }
+  .sign:last-child { break-after: auto; }
+  .sign__brand { font-size: 16pt; }
+  .sign__code { font-size: 72pt; }
+  .sign__name { font-size: 14pt; }
+  .sign__qr { width: 110mm; height: 110mm; }
+  .sign__scan { font-size: 20pt; }
+  .sign__alt { font-size: 11pt; max-width: 40ch; }
+  .sign__doorcode { font-size: 26pt; }
+  .sign__rule { font-size: 10pt; max-width: 50ch; }
+  .sign__url { font-size: 8pt; }
+}
+
+@media (max-width: 420px) {
+  .door-later__item { grid-template-columns: 96px minmax(0, 1fr); }
+  .door-later__item .tag { grid-column: 2; justify-self: start; margin-left: 0; }
+}

@@ -7,6 +7,7 @@ import { startPasswordToggles } from './password-toggle.js';
 import { showWeek, hideWeek, weekHref } from './week.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
+import { checkInLine } from './checkin.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -342,6 +343,7 @@ function renderNext(bookings) {
       h('span', { class: 'mono' }, countdown),
       ` · ${next.room_name}, ${next.building_code}`,
       next.status === 'pending' ? h('span', { class: 'tag tag--pending' }, 'Awaiting approval') : ''),
+    checkInLine(next, state.meta.rules, { onDone: refreshAfterChange }),
   );
 }
 
@@ -379,7 +381,9 @@ function bookingRow(b) {
     h('span', { class: 'mono row__when' }, `${longDate(b.date)} ${b.start_time}–${b.end_time}`,
       b.series_id ? h('span', { class: 'row__weekly', title: 'Part of a weekly booking' }, '↻ weekly') : ''),
     h('span', { class: 'row__side' },
-      h('span', { class: `tag tag--${b.status}` }, b.status === 'pending' ? 'awaiting approval' : b.status),
+      h('span', { class: `tag tag--${b.status}` }, b.status === 'pending' ? 'awaiting approval'
+        : b.status === 'released' ? 'released · no check-in'
+        : b.checked_in_at ? 'checked in' : b.status),
       ['pending', 'approved'].includes(b.status)
         ? h('span', { class: 'row__cancels' }, cancelButton(b), b.series_id ? cancelButton(b, true) : '')
         : ''));
@@ -478,7 +482,15 @@ async function enterApp(user) {
     refreshPendingBadge();
     state.badgeTimer = setInterval(refreshPendingBadge, 60_000);
   }
+  // Signed in from a door sign: go back to that door.
+  const next = new URLSearchParams(location.search).get('next');
+  if (next && /^\/door\?c=[A-Za-z0-9-]{6,7}$/.test(next)) { location.replace(next); return; }
   await route();
+  // The next-booking card's check-in button appears and disappears with the clock.
+  clearInterval(state.dashTimer);
+  state.dashTimer = setInterval(() => {
+    if (!$('[data-view="dashboard"]').hidden && !document.hidden) loadDashboard().catch(() => {});
+  }, 60_000);
 }
 
 const PAGES = { '#/board': 'board' };
@@ -712,6 +724,7 @@ async function showPhonePrompt() {
 
 function leaveApp() {
   state.user = null;
+  clearInterval(state.dashTimer);
   state.tempPassword = null;
   state.accessError = null;
   $('[data-view="password"]').hidden = true;

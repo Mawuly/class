@@ -15,7 +15,7 @@ const EXCLUSION_VIOLATION = '23P01'; // Postgres error code raised by the no-ove
 const BOOKING_COLUMNS = `
   b.id, b.room_id, r.code AS room_code, r.name AS room_name, bl.code AS building_code,
   b.user_id, b.title, b.category, b.course_code, b.date, b.start_time, b.end_time,
-  b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at`;
+  b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at, b.checked_in_at, b.released_at`;
 const BOOKING_FROM = 'bookings b JOIN rooms r ON r.id = b.room_id JOIN buildings bl ON bl.id = r.building_id';
 
 function str(v, max) {

@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   end_time        time        NOT NULL,
   attendees       integer     NOT NULL CHECK (attendees > 0),
   notes           text,
-  status          text        NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+  status          text        NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'released')),
   series_id       integer     REFERENCES booking_series(id),
   decided_by      integer     REFERENCES users(id),
   decision_reason text,
@@ -198,11 +198,35 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
 );
 CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications (user_id, created_at);
 
+-- Check-in and door codes (schema version 8).
+-- Every room has a short code printed on its door, with a QR code that opens /door?c=CODE.
+-- Typing or scanning it proves you are at the room. An approved booking nobody checks in to
+-- within the grace period is "released": the slot frees up for someone else.
+CREATE OR REPLACE FUNCTION new_door_code() RETURNS text LANGUAGE sql VOLATILE AS $$
+  -- 31 letters and digits that can't be mistaken for each other (no I, L, O, 0, 1).
+  SELECT string_agg(substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + get_byte(uuid_send(gen_random_uuid()), 0) % 31, 1), '')
+  FROM generate_series(1, 6)
+$$;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS door_code text;
+UPDATE rooms SET door_code = new_door_code() WHERE door_code IS NULL;
+ALTER TABLE rooms ALTER COLUMN door_code SET DEFAULT new_door_code();
+ALTER TABLE rooms ALTER COLUMN door_code SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS rooms_door_code_key ON rooms (door_code);
+
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at timestamptz;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS released_at   timestamptz;
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
+  CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'released'));
+CREATE INDEX IF NOT EXISTS idx_bookings_date_status ON bookings (date, status);
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,
   value text NOT NULL
 );
+-- The day check-in started, so statistics don't count older bookings as missed check-ins.
+INSERT INTO app_meta (key, value) VALUES ('checkin_since', to_char(current_date, 'YYYY-MM-DD')) ON CONFLICT (key) DO NOTHING;
 
 -- Supabase publishes every table in the public schema through its REST API using the public
 -- "anon" key. Row Level Security with no policies closes that door: only this server, which

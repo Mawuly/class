@@ -111,7 +111,20 @@ function kpis(d) {
       ? `${num(req.approved)} approved · ${num(req.rejected)} rejected · ${num(req.pending)} waiting`
       : 'None in this period'),
     tile('Time to a decision', req.medianDecisionHours == null ? '—' : hrs(req.medianDecisionHours),
-      decided ? `Median, from request to decision · ${decided} decided` : 'No decisions in this period'));
+      decided ? `Median, from request to decision · ${decided} decided` : 'No decisions in this period'),
+    attendanceTile(d.attendance, tile));
+}
+
+/* Check-in at the door: how many bookings were really used, and how many rooms were freed. */
+function attendanceTile(a, tile) {
+  if (!a) return '';
+  if (!a.total) {
+    return tile('Checked in', '—', `No bookings to check in to since check-in started (${longDate(a.since)})`);
+  }
+  const parts = [`${num(a.checkedIn)} of ${num(a.total)} bookings`];
+  if (a.released) parts.push(`${num(a.released)} no-show${a.released === 1 ? '' : 's'} released`);
+  if (a.missed) parts.push(`${num(a.missed)} ended unchecked`);
+  return tile('Checked in', pct(a.rate), parts.join(' · '));
 }
 
 /* Busiest hours: columns, the busiest at full strength (emphasis form), value on its cap only. */

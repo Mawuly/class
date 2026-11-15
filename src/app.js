@@ -9,6 +9,7 @@ const { requireXhr } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
 const { AppError } = require('./utils/errors');
 const { ensureReady } = require('./db/setup');
+const { releaseIfDue } = require('./services/checkin');
 
 const app = express();
 
@@ -55,6 +56,11 @@ api.use(async (req, res, next) => {
 api.use(requireXhr);
 api.use(authenticate);
 api.use(requirePasswordChosen);
+// Free the rooms of bookings nobody checked in to, before anything reads them.
+api.use(async (req, res, next) => {
+  await releaseIfDue();
+  next();
+});
 api.use('/public', require('./routes/public'));
 api.use('/auth', require('./routes/auth'));
 api.use('/rooms', require('./routes/rooms'));
@@ -63,6 +69,7 @@ api.use('/admin', require('./routes/admin'));
 api.use('/notifications', require('./routes/notifications'));
 api.use('/access-requests', require('./routes/access'));
 api.use('/calendar', require('./routes/calendar').router);
+api.use('/door', require('./routes/door'));
 api.use(notFound);
 app.use('/api', api);
 

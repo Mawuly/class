@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#12161C">
+  <title>Room Door</title>
+  <meta name="description" content="Check in to your booking, see whether this room is free, and book it.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312161C'/%3E%3Crect x='8' y='8' width='16' height='16' fill='%23EDE6DA'/%3E%3C/svg%3E">
+  <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/door.js"></script>
+</head>
+<body class="is-app is-door">
+  <div class="stage" aria-hidden="true"><div class="stage__fallback"></div></div>
+
+  <header class="topbar door-top">
+    <a class="brand" href="/">Lecture Rooms</a>
+    <span class="clock mono" data-clock></span>
+  </header>
+
+  <main class="door" data-door aria-live="polite">
+    <p class="muted door__loading">Loading this room…</p>
+  </main>
+
+  <!-- Shared sheet (check-in by typed code) -->
+  <dialog class="sheet" data-edit-sheet aria-labelledby="edit-title">
+    <div class="sheet__panel glass">
+      <header class="sheet__head">
+        <h2 class="panel__title" id="edit-title" data-edit-title>Edit</h2>
+        <button class="link-button sheet__close" type="button" data-edit-close>Close</button>
+      </header>
+      <div data-edit-body></div>
+    </div>
+  </dialog>
+</body>
+</html>
