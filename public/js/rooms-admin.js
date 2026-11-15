@@ -28,7 +28,8 @@ const r = {
 function roomRow(room) {
   const who = room.bookable_by === 'staff' ? 'Staff only' : 'Everyone';
   return h('div', { class: `rt-row${room.is_active ? '' : ' rt-row--inactive'}`, role: 'row' },
-    h('span', { class: 'rt-code mono', role: 'cell' }, room.code),
+    h('span', { class: 'rt-code mono', role: 'cell' },
+      room.is_active ? h('a', { href: `#/room/${room.id}`, title: `See ${room.code}'s week` }, room.code) : room.code),
     h('span', { class: 'rt-name', role: 'cell' }, room.name,
       room.is_active ? null : h('span', { class: 'tag tag--cancelled' }, 'inactive')),
     h('span', { class: 'rt-type', role: 'cell' }, TYPE_LABEL[room.type] || room.type),

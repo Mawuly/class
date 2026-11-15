@@ -228,6 +228,37 @@
     <p class="visually-hidden" aria-live="polite" data-board-live></p>
   </main>
 
+  <!-- Room week: one room, Monday to Sunday ------------------------------------------ -->
+  <main class="board-view week-view" data-view="week" hidden>
+    <a class="week-back" href="#/board">← Day board</a>
+    <div class="board-bar">
+      <div class="board-bar__heading">
+        <h1 class="mono week-code" data-week-code></h1>
+        <p class="week-name" data-week-name></p>
+        <p class="mono board-bar__summary" data-week-facts></p>
+      </div>
+      <div class="board-bar__controls">
+        <div class="day-nav" role="group" aria-label="Choose a week">
+          <button class="button button--secondary day-nav__step" type="button" data-week-step="-1" aria-label="Previous week">‹</button>
+          <button class="button button--secondary" type="button" data-week-today>This week</button>
+          <button class="button button--secondary day-nav__step" type="button" data-week-step="1" aria-label="Next week">›</button>
+          <input type="date" class="mono day-nav__date" data-week-date aria-label="Go to the week of">
+        </div>
+      </div>
+      <ul class="legend" aria-label="Key">
+        <li><span class="swatch swatch--free"></span>Free</li>
+        <li><span class="swatch swatch--approved"></span>Booked</li>
+        <li><span class="swatch swatch--pending"></span>Awaiting approval</li>
+        <li><span class="swatch swatch--approved"><b>■</b></span>Yours</li>
+      </ul>
+    </div>
+    <p class="mono week-range" data-week-range></p>
+    <p class="alert" data-error hidden></p>
+    <div class="week" data-week></div>
+    <p class="board-hint" data-week-hint></p>
+    <p class="visually-hidden" aria-live="polite" data-week-live></p>
+  </main>
+
   <!-- Approval queue (admins): reads like an inbox ----------------------------------- -->
   <main class="queue-view" data-view="approvals" hidden>
     <div class="queue-bar">

@@ -5,6 +5,7 @@ import { showApprovals, pendingCount } from './approvals.js';
 import { showRooms } from './rooms-admin.js';
 import { showPeople } from './people-admin.js';
 import { showStats } from './stats.js';
+import { showWeek, hideWeek, weekHref } from './week.js';
 import { staffFields, ROLE_LABEL } from './access-form.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
@@ -387,7 +388,7 @@ async function findRooms(form) {
     state.search = { date, start, end, attendees: people };
     list.replaceChildren(...(rooms.length
       ? rooms.slice(0, 8).map((r) => h('li', { class: 'result' },
-        h('span', { class: 'result__code mono' }, r.code),
+        h('a', { class: 'result__code mono', href: weekHref(r.id, date), title: `See ${r.code}'s week` }, r.code),
         h('span', { class: 'result__where' }, r.name, h('small', {}, r.building_name)),
         h('span', { class: 'result__cap mono' }, `${r.capacity} seats`),
         h('button', {
@@ -450,18 +451,23 @@ async function enterApp(user) {
 }
 
 const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people', '#/stats': 'stats' };
-const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms', 'people', 'stats'];
+const APP_VIEWS = ['dashboard', 'board', 'week', 'approvals', 'rooms', 'people', 'stats'];
 const ADMIN_PAGES = ['approvals', 'rooms', 'people', 'stats'];
 
 /** Signed-in pages: "#/" dashboard, "#/board" day board; admins also approvals, rooms and people. */
 async function route() {
   if (!state.user) return;
-  let page = PAGES[location.hash] || 'dashboard';
+  // "#/room/12?date=2026-11-16" is one room's week.
+  const roomMatch = location.hash.match(/^#\/room\/(\d+)(?:\?date=(\d{4}-\d{2}-\d{2}))?$/);
+  let page = roomMatch ? 'week' : PAGES[location.hash] || 'dashboard';
   if (ADMIN_PAGES.includes(page) && state.user.role !== 'admin') page = 'dashboard';
   for (const v of APP_VIEWS) $(`[data-view="${v}"]`).hidden = v !== page;
   // Data-heavy pages keep the top bar fixed as glass over the scrolling page.
   document.body.classList.toggle('is-board', page !== 'dashboard');
-  for (const a of $$('[data-nav]')) a.toggleAttribute('aria-current', a.dataset.nav === page);
+  // The week view belongs under the day board in the navigation.
+  for (const a of $$('[data-nav]')) a.toggleAttribute('aria-current', a.dataset.nav === (page === 'week' ? 'board' : page));
+  if (page === 'week') showWeek({ user: state.user, rules: state.meta.rules }, Number(roomMatch[1]), roomMatch[2]);
+  else hideWeek();
   if (page === 'board') showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
   else hideBoard();
   if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
@@ -612,6 +618,7 @@ function leaveApp() {
   $('[data-signed-in]').hidden = true;
   document.body.classList.remove('is-board');
   hideBoard();
+  hideWeek();
   switchForm('login');
 }
 

@@ -54,7 +54,12 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   notes on under-used and over-sized rooms. Every chart has a table view, and room figures download
   as CSV
 
-Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
+- Room week view (click a room's code on the day board, in search results or in the admin rooms list):
+  Monday to Sunday across, time running down; the room's seats, type and facilities; click or drag
+  down an empty slot to book; keyboard arrows move by half-hour and by day; previous / this / next
+  week, and a date picker; the address (#/room/12?date=…) can be bookmarked or shared
+
+Next: recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally
 

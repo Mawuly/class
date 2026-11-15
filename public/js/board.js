@@ -82,7 +82,7 @@ function row(room, bookings, bookableFrom) {
 
   return h('div', { class: 'board__row' },
     h('div', { class: 'board__room' },
-      h('span', { class: 'board__code mono' }, room.code),
+      h('a', { class: 'board__code mono', href: `#/room/${room.id}?date=${b.date}`, title: `See ${room.code}'s week` }, room.code),
       h('span', { class: 'board__cap mono' }, `· ${room.capacity}`),
       h('span', { class: 'board__name' }, room.canBook ? room.name : h('em', {}, 'Staff only'))),
     track);

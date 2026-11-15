@@ -915,3 +915,36 @@ describe('statistics', () => {
     assert.equal((await admin.get('/api/admin/stats?from=nope')).status, 400);
   });
 });
+
+describe('room week', () => {
+  let lecturer; let student;
+  beforeEach(async () => {
+    await resetDb();
+    lecturer = await signedIn('wk.lecturer@campus.test', 'lecturer');
+    student = await signedIn('wk.student@campus.test');
+  });
+
+  test('returns Monday to Sunday around any date, with your own bookings marked', async () => {
+    const date = tomorrow();
+    await lecturer.post('/api/bookings').send({ roomId: await roomId('LT-2'), title: 'Mine', category: 'lecture', date, start: '09:00', end: '11:00', attendees: 40 });
+    const res = await lecturer.get(`/api/rooms/${await roomId('LT-2')}/week?date=${date}`);
+    assert.equal(res.status, 200);
+    assert.equal(new Date(`${res.body.from}T00:00:00Z`).getUTCDay(), 1); // Monday
+    assert.equal(addDays(res.body.from, 6), res.body.to);
+    assert.ok(res.body.from <= date && date <= res.body.to);
+    assert.equal(res.body.bookings.length, 1);
+    assert.equal(res.body.bookings[0].mine, true);
+    assert.equal(res.body.bookings[0].user_id, undefined);
+    assert.equal(res.body.room.canBook, true);
+    // A student sees the same timetable but can't book a lecture hall, and it isn't marked theirs
+    const s = await student.get(`/api/rooms/${await roomId('LT-2')}/week?date=${date}`);
+    assert.equal(s.body.room.canBook, false);
+    assert.equal(s.body.bookings[0].mine, false);
+    assert.equal((await student.get(`/api/rooms/${await roomId('LT-2')}/week?date=13-11-2026`)).status, 400);
+  });
+
+  test('a Sunday belongs to the week that started the Monday before', async () => {
+    const res = await lecturer.get(`/api/rooms/${await roomId('LT-1')}/week?date=2026-11-15`);
+    assert.deepEqual([res.body.from, res.body.to], ['2026-11-09', '2026-11-15']);
+  });
+});
