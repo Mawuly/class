@@ -499,3 +499,104 @@ describe('room management', () => {
     assert.equal(row.details.name, 'Lecture Theatre Three');
   });
 });
+
+describe('user management', () => {
+  let admin; let lecturer; let student;
+  const date = tomorrow();
+
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('chief@campus.test', 'admin');
+    lecturer = await signedIn('amoah@campus.test', 'lecturer');
+    student = await signedIn('akua@campus.test');
+    await db.run("UPDATE users SET index_number = '10955555', department = 'Law' WHERE email = 'akua@campus.test'");
+  });
+
+  test('only admins can list or change people', async () => {
+    assert.equal((await lecturer.get('/api/admin/users')).status, 403);
+    assert.equal((await student.patch(`/api/admin/users/${student.user.id}`).send({ role: 'admin' })).status, 403);
+  });
+
+  test('list, search by name, email or index number, and filter by role', async () => {
+    const all = await admin.get('/api/admin/users');
+    assert.equal(all.body.users.length, 3);
+    assert.deepEqual(all.body.counts, { active: 3, inactive: 0, students: 1, lecturers: 1, admins: 1 });
+    assert.equal((await admin.get('/api/admin/users?q=10955')).body.users[0].email, 'akua@campus.test');
+    assert.equal((await admin.get('/api/admin/users?q=AMOAH')).body.users[0].role, 'lecturer');
+    assert.equal((await admin.get('/api/admin/users?role=student')).body.users.length, 1);
+    assert.equal((await admin.get('/api/admin/users?q=%25')).body.users.length, 0); // % is matched literally
+  });
+
+  test('making a student a lecturer takes effect on their next request, and they are told', async () => {
+    const res = await admin.patch(`/api/admin/users/${student.user.id}`).send({ role: 'lecturer' });
+    assert.equal(res.status, 200);
+    assert.equal((await student.get('/api/auth/me')).body.user.role, 'lecturer');
+    const booking = await student.post('/api/bookings').send({
+      roomId: await roomId('LT-1'), title: 'Moot court', category: 'lecture', date, start: '09:00', end: '10:00', attendees: 50,
+    });
+    assert.equal(booking.body.booking.status, 'approved');
+    const notes = await student.get('/api/notifications');
+    assert.match(notes.body.notifications[0].message, /now a lecturer account/);
+  });
+
+  test('you cannot change your own role or deactivate yourself', async () => {
+    const role = await admin.patch(`/api/admin/users/${admin.user.id}`).send({ role: 'student' });
+    assert.equal(role.status, 403);
+    const off = await admin.patch(`/api/admin/users/${admin.user.id}`).send({ isActive: false });
+    assert.equal(off.status, 403);
+  });
+
+  test('an admin can demote another admin, and the system never ends up without an active admin', async () => {
+    const deputy = await signedIn('deputy@campus.test', 'admin');
+    assert.equal((await deputy.patch(`/api/admin/users/${admin.user.id}`).send({ role: 'lecturer' })).status, 200);
+    // The chief is now a lecturer and can no longer manage people.
+    assert.equal((await admin.patch(`/api/admin/users/${deputy.user.id}`).send({ role: 'student' })).status, 403);
+    // Backstop below the API: removing the only active admin is refused even if called directly.
+    const userAdmin = require('../src/services/userAdmin');
+    await assert.rejects(
+      userAdmin.update({ id: -1 }, deputy.user.id, { role: 'student' }),
+      /only active admin/,
+    );
+    await assert.rejects(
+      userAdmin.update({ id: -1 }, deputy.user.id, { isActive: false }),
+      /only active admin/,
+    );
+  });
+
+  test('an admin listed in ADMIN_EMAILS cannot be demoted here', async () => {
+    const boss = await agent();
+    const reg = await boss.post('/api/auth/register').send({ name: 'Boss', email: 'boss@campus.test', password: PASSWORD });
+    assert.equal(reg.body.user.role, 'admin');
+    const res = await admin.patch(`/api/admin/users/${reg.body.user.id}`).send({ role: 'student' });
+    assert.equal(res.status, 409);
+    assert.match(res.body.error, /ADMIN_EMAILS/);
+    assert.equal((await admin.get('/api/admin/users?q=boss')).body.users[0].in_admin_emails, true);
+  });
+
+  test('deactivating someone with upcoming bookings asks first, then frees the rooms and signs them out', async () => {
+    const b = await lecturer.post('/api/bookings').send({
+      roomId: await roomId('LT-2'), title: 'Lecture', category: 'lecture', date, start: '08:00', end: '10:00', attendees: 100,
+    });
+    const ask = await admin.patch(`/api/admin/users/${lecturer.user.id}`).send({ isActive: false });
+    assert.equal(ask.status, 409);
+    assert.equal(ask.body.upcoming, 1);
+    const ok = await admin.patch(`/api/admin/users/${lecturer.user.id}`).send({ isActive: false, cancelUpcoming: true });
+    assert.equal(ok.body.cancelled, 1);
+    assert.equal((await db.get('SELECT status FROM bookings WHERE id = ?', [b.body.booking.id])).status, 'cancelled');
+    assert.equal((await lecturer.get('/api/auth/me')).status, 401);
+    assert.equal((await agent().post('/api/auth/login').send({ email: 'amoah@campus.test', password: PASSWORD })).status, 401);
+    assert.equal((await admin.get('/api/admin/users?status=inactive')).body.users[0].email, 'amoah@campus.test');
+    // Reactivate
+    await admin.patch(`/api/admin/users/${lecturer.user.id}`).send({ isActive: true });
+    assert.equal((await agent().post('/api/auth/login').send({ email: 'amoah@campus.test', password: PASSWORD })).status, 200);
+  });
+
+  test('details can be corrected, and changes are audited', async () => {
+    await admin.patch(`/api/admin/users/${student.user.id}`).send({ name: 'Akua Mensah', department: 'Law', indexNumber: '10955556' });
+    const u = await db.get('SELECT name, index_number FROM users WHERE id = ?', [student.user.id]);
+    assert.deepEqual(u, { name: 'Akua Mensah', index_number: '10955556' });
+    await admin.patch(`/api/admin/users/${student.user.id}`).send({ role: 'lecturer' });
+    const row = await db.get("SELECT details FROM audit_log WHERE action = 'user.role_change'");
+    assert.deepEqual(row.details, { role: 'lecturer', from: 'student' });
+  });
+});

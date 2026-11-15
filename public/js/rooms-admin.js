@@ -1,11 +1,10 @@
 // Room management for admins: add, edit, deactivate and delete rooms and buildings.
 import { api } from './api.js';
 import { $, $$, h, showError } from './util.js';
+import { openEditSheet, closeEditSheet } from './edit-sheet.js';
 
 const view = $('[data-view="rooms"]');
 const table = $('[data-rooms-table]', view);
-const sheet = $('[data-edit-sheet]');
-const body = $('[data-edit-body]', sheet);
 
 const TYPE_LABEL = {
   lecture_hall: 'Lecture hall', lab: 'Lab', seminar: 'Seminar room', study: 'Study room', meeting: 'Meeting room',
@@ -22,7 +21,6 @@ const r = {
   buildingId: '',
   showInactive: false,
   onChange: null,        // app.js refreshes cached room lists after an edit
-  opener: null,
 };
 
 /* ---------- Table ------------------------------------------------------------------ */
@@ -38,7 +36,7 @@ function roomRow(room) {
     h('span', { class: 'rt-floor mono', role: 'cell' }, room.floor),
     h('span', { class: 'rt-fac mono', role: 'cell' }, room.facilities.map(facilityLabel).join(' · ') || '—'),
     h('span', { class: 'rt-who', role: 'cell' }, who),
-    h('span', { class: 'rt-up mono', role: 'cell', title: 'Upcoming bookings' }, room.upcoming || '—'),
+    h('span', { class: 'rt-up mono', role: 'cell', title: 'Upcoming bookings' }, room.upcoming || ''),
     h('span', { class: 'rt-act', role: 'cell' },
       h('button', { class: 'link-button', type: 'button', 'aria-label': `Edit ${room.code}`, onclick: () => openRoom(room) }, 'Edit')));
 }
@@ -108,16 +106,7 @@ async function changed() {
 
 /* ---------- Editor sheet ------------------------------------------------------------ */
 
-function openSheet(title) {
-  r.opener = document.activeElement;
-  $('[data-edit-title]', sheet).textContent = title;
-  document.body.classList.add('has-sheet');
-  if (!sheet.open) sheet.showModal();
-}
-
-function closeSheet() {
-  if (sheet.open) sheet.close();
-}
+const closeSheet = closeEditSheet;
 
 function field(label, input, hint) {
   return h('label', { class: 'field' }, h('span', { class: 'field__label' }, label), input,
@@ -276,8 +265,7 @@ function openRoom(room, buildingId) {
         : h('p', { class: 'field__hint' }, 'This room has never been booked, so it can be deleted.')));
   }
 
-  body.replaceChildren(...parts);
-  openSheet(editing ? `Edit ${room.code}` : 'Add a room');
+  openEditSheet(editing ? `Edit ${room.code}` : 'Add a room', ...parts);
   (editing ? name : code).focus();
 }
 
@@ -317,8 +305,7 @@ function openBuilding(b) {
           } catch (err) { showError(form, err.message); }
         })));
   }
-  body.replaceChildren(...parts);
-  openSheet(editing ? `Edit ${b.code}` : 'Add a building');
+  openEditSheet(editing ? `Edit ${b.code}` : 'Add a building', ...parts);
   (editing ? name : code).focus();
 }
 
@@ -335,9 +322,3 @@ $('[data-rooms-building]', view).addEventListener('change', (e) => { r.buildingI
 $('[data-rooms-inactive]', view).addEventListener('change', (e) => { r.showInactive = e.target.checked; render(); });
 $('[data-add-room]', view).addEventListener('click', () => openRoom(null, r.buildingId ? Number(r.buildingId) : undefined));
 $('[data-add-building]', view).addEventListener('click', () => openBuilding(null));
-$('[data-edit-close]', sheet).addEventListener('click', closeSheet);
-sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
-sheet.addEventListener('close', () => {
-  document.body.classList.remove('has-sheet');
-  r.opener?.focus?.();
-});

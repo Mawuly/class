@@ -30,6 +30,7 @@
       <a class="topbar__link" href="#/board" data-nav="board">Day board</a>
       <a class="topbar__link" href="#/approvals" data-nav="approvals" data-admin-only hidden>Approvals <span class="count mono" data-pending-badge hidden></span></a>
       <a class="topbar__link" href="#/rooms" data-nav="rooms" data-admin-only hidden>Rooms</a>
+      <a class="topbar__link" href="#/people" data-nav="people" data-admin-only hidden>People</a>
       <span class="topbar__who" data-user-name></span>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -202,6 +203,33 @@
     </div>
     <p class="alert" data-error hidden></p>
     <div class="rooms-table" data-rooms-table></div>
+  </main>
+
+  <!-- People (admins) ------------------------------------------------------------------ -->
+  <main class="rooms-view" data-view="people" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">People</h1>
+        <p class="mono page-bar__summary" data-people-summary></p>
+      </div>
+      <div class="rooms-filters">
+        <input type="search" placeholder="Name, email or index number" data-people-search aria-label="Search people">
+        <select data-people-role aria-label="Role">
+          <option value="">All roles</option>
+          <option value="student">Students</option>
+          <option value="lecturer">Lecturers</option>
+          <option value="admin">Admins</option>
+        </select>
+        <select data-people-status aria-label="Status">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="all">Everyone</option>
+        </select>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="rooms-table" data-people-table></div>
+    <p class="board-hint">People register themselves and start as students. Make lecturers and admins here.</p>
   </main>
 
   <!-- Room / building editor: same sliding glass sheet as booking -------------------- -->

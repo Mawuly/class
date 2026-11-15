@@ -28,6 +28,11 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
   seats, type, facilities and who can book; deactivate a room (its upcoming bookings are cancelled and
   the people who booked are told, after a confirmation); delete rooms that were never booked
 
+- People for admins (People in the top bar): search by name, email or index number; make someone a
+  student, lecturer or admin (they're told, and it applies on their next click); correct details;
+  deactivate an account (upcoming bookings are cancelled after a confirmation). You can't change your
+  own role or deactivate yourself, and people in `ADMIN_EMAILS` can't be demoted here
+
 Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally

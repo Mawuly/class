@@ -3,6 +3,7 @@ import { openSheet } from './sheet.js';
 import { showBoard, hideBoard } from './board.js';
 import { showApprovals, pendingCount } from './approvals.js';
 import { showRooms } from './rooms-admin.js';
+import { showPeople } from './people-admin.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -297,11 +298,11 @@ async function enterApp(user) {
   await route();
 }
 
-const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms' };
-const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms'];
-const ADMIN_PAGES = ['approvals', 'rooms'];
+const PAGES = { '#/board': 'board', '#/approvals': 'approvals', '#/rooms': 'rooms', '#/people': 'people' };
+const APP_VIEWS = ['dashboard', 'board', 'approvals', 'rooms', 'people'];
+const ADMIN_PAGES = ['approvals', 'rooms', 'people'];
 
-/** Signed-in pages: "#/" dashboard, "#/board" day board; admins also "#/approvals" and "#/rooms". */
+/** Signed-in pages: "#/" dashboard, "#/board" day board; admins also approvals, rooms and people. */
 async function route() {
   if (!state.user) return;
   let page = PAGES[location.hash] || 'dashboard';
@@ -314,6 +315,7 @@ async function route() {
   else hideBoard();
   if (page === 'approvals') showApprovals({ onCountChange: setPendingBadge });
   // After a room edit, refresh the cached building and facility lists used by the board and search.
+  if (page === 'people') showPeople({ me: state.user });
   if (page === 'rooms') showRooms({ onChange: async () => { state.meta = await api('/rooms/meta'); } });
   if (page === 'dashboard') await loadDashboard();
 }

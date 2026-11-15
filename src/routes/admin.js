@@ -2,6 +2,7 @@
 const express = require('express');
 const bookings = require('../services/bookings');
 const roomAdmin = require('../services/roomAdmin');
+const userAdmin = require('../services/userAdmin');
 const { requireRole } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { parseId } = require('../utils/validate');
@@ -59,6 +60,13 @@ router.delete('/rooms/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Users, stats and the audit log come next.
+/* ---------- People ------------------------------------------------------------------ */
+
+router.get('/users', async (req, res) => res.json(await userAdmin.list(req.query)));
+router.patch('/users/:id', async (req, res) => {
+  res.json(await userAdmin.update(req.user, parseId(req.params.id, 'Person'), req.body ?? {}, { ip: req.ip }));
+});
+
+// Stats and the audit log come next.
 
 module.exports = router;
