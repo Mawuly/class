@@ -4,6 +4,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('./index');
 const { seedReference, seedDemo } = require('./seed');
+const { switchToCampus } = require('./campus');
 
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
@@ -44,10 +45,25 @@ function ensureReady() {
       );
     }
     const { rooms } = await x.get('SELECT count(*)::int AS rooms FROM rooms');
+    const campus = (await x.get("SELECT value FROM app_meta WHERE key = 'campus'"))?.value || null;
     if (rooms === 0) {
-      console.log('[setup] loading buildings and rooms');
+      console.log(`[setup] loading the buildings and rooms of campus "${config.campus}"`);
       await seedReference(x);
+    } else if (campus !== config.campus) {
+      // A database set up before the real campus was added (it has the demo rooms): switch once.
+      const changed = await switchToCampus(x, config.campus);
+      await x.run(
+        `INSERT INTO app_meta (key, value) VALUES ('campus', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+        [config.campus],
+      );
+      console.log(`[setup] switched to campus "${config.campus}"`, changed);
     }
+    // Demo rooms kept for bookings that were still coming up: hide them once those are over.
+    await x.run(
+      `UPDATE rooms r SET is_active = false WHERE r.is_active AND r.code LIKE 'DEMO-%' AND NOT EXISTS (
+         SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.status IN ('pending', 'approved')
+           AND (b.date > current_date OR (b.date = current_date AND b.end_time > localtime)))`,
+    );
     if (config.seedDemo) {
       const { users } = await x.get('SELECT count(*)::int AS users FROM users');
       if (users === 0) {

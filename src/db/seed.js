@@ -3,46 +3,15 @@ const bcrypt = require('bcryptjs');
 const config = require('../config');
 const { localDate, addDays } = require('../utils/time');
 
-const BUILDINGS = [
-  ['LTB', 'Lecture Theatre Block'],
-  ['SCB', 'Science Block'],
-  ['NAB', 'New Academic Block'],
-  ['LIB', 'Main Library'],
-];
+const { loadCampus } = require('./campus');
 
-// [building, code, name, type, capacity, floor, facilities]
-const ROOMS = [
-  ['LTB', 'LT-1', 'Lecture Theatre 1', 'lecture_hall', 300, 0, ['projector', 'pa_system', 'ac']],
-  ['LTB', 'LT-2', 'Lecture Theatre 2', 'lecture_hall', 200, 0, ['projector', 'pa_system', 'ac']],
-  ['LTB', 'LT-3', 'Lecture Theatre 3', 'lecture_hall', 120, 1, ['projector', 'whiteboard']],
-  ['SCB', 'SCB-101', 'Computer Lab 1', 'lab', 60, 1, ['computers', 'projector', 'ac']],
-  ['SCB', 'SCB-104', 'Seminar Room 104', 'seminar', 40, 1, ['projector', 'whiteboard']],
-  ['SCB', 'SCB-105', 'Seminar Room 105', 'seminar', 30, 1, ['whiteboard']],
-  ['SCB', 'SCB-201', 'Science Lecture Hall', 'lecture_hall', 150, 2, ['projector', 'pa_system']],
-  ['SCB', 'SCB-210', 'Physics Lab', 'lab', 45, 2, ['whiteboard']],
-  ['NAB', 'NAB-001', 'Great Hall', 'lecture_hall', 250, 0, ['projector', 'pa_system', 'ac']],
-  ['NAB', 'NAB-104', 'Seminar Room 104', 'seminar', 50, 1, ['projector', 'whiteboard', 'ac']],
-  ['NAB', 'NAB-205', 'Meeting Room A', 'meeting', 12, 2, ['video_conf', 'whiteboard', 'ac']],
-  ['NAB', 'NAB-206', 'Meeting Room B', 'meeting', 16, 2, ['projector', 'ac']],
-  ['LIB', 'LIB-S1', 'Study Room 1', 'study', 6, 1, ['whiteboard']],
-  ['LIB', 'LIB-S2', 'Study Room 2', 'study', 8, 1, ['whiteboard']],
-  ['LIB', 'LIB-S3', 'Library Seminar 3', 'seminar', 20, 2, ['projector', 'whiteboard']],
-  ['LIB', 'LIB-G1', 'Group Study Pod', 'study', 10, 0, ['whiteboard', 'ac']],
-];
-
-/** Buildings and rooms. Skips anything that already exists. */
-async function seedReference(db) {
-  for (const [code, name] of BUILDINGS) {
-    await db.run('INSERT INTO buildings (code, name) VALUES (?, ?) ON CONFLICT (code) DO NOTHING', [code, name]);
-  }
-  for (const [b, code, name, type, capacity, floor, facilities] of ROOMS) {
-    await db.run(
-      `INSERT INTO rooms (building_id, code, name, type, capacity, floor, facilities, bookable_by)
-       VALUES ((SELECT id FROM buildings WHERE code = ?), ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (code) DO NOTHING`,
-      [b, code, name, type, capacity, floor, JSON.stringify(facilities),
-        type === 'lecture_hall' || type === 'lab' ? 'staff' : 'all'],
-    );
-  }
+/** Buildings and rooms of the configured campus (see db/campus.js). Skips anything that already exists. */
+async function seedReference(db, campus = config.campus) {
+  await loadCampus(db, campus);
+  await db.run(
+    `INSERT INTO app_meta (key, value) VALUES ('campus', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+    [campus],
+  );
 }
 
 const DEMO_PASSWORD = 'Campus2026';
@@ -92,7 +61,12 @@ async function seedDemo(db, { includeAdmin = true } = {}) {
     ['LIB-S1', student, 'Exam revision', 'study', null, tomorrow, '10:00', '12:00', 4, 'pending'],
     ['LT-2', lecturer, 'Software Engineering', 'lecture', 'CSC 303', tomorrow, '08:30', '10:30', 190, 'approved'],
   ];
-  for (const [room, user, title, category, course, date, start, end, attendees, status] of rows) {
+  // The same sample bookings on the real campus's rooms.
+  const UCC = {
+    'LT-1': 'NLT-1', 'LT-2': 'NLT-2', 'SCB-101': 'LT-5', 'SCB-104': 'G1', 'NAB-001': 'CALC-AUD', 'LIB-S3': 'CRT-1', 'LIB-S1': 'CRT-2',
+  };
+  for (const [demoRoom, user, title, category, course, date, start, end, attendees, status] of rows) {
+    const room = config.campus === 'demo' ? demoRoom : UCC[demoRoom];
     await db.run(
       `INSERT INTO bookings (room_id, user_id, title, category, course_code, date, start_time, end_time, attendees, status)
        VALUES ((SELECT id FROM rooms WHERE code = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -95,6 +95,9 @@ module.exports = {
     // "true" asks Arkesel to accept messages without sending or charging: for testing the set-up.
     sandbox: /^(1|true|yes)$/i.test(process.env.ARKESEL_SANDBOX || ''),
   },
+  // Which campus's buildings and rooms to load: "ucc" (University of Cape Coast) or "demo"
+  // (a small made-up campus, used by the tests). See db/campus.js.
+  campus: (process.env.CAMPUS || (isTest ? 'demo' : 'ucc')).toLowerCase(),
   // e.g. "ug.edu.gh" — leave empty to allow any email address
   allowedEmailDomain: (process.env.ALLOWED_EMAIL_DOMAIN || '').toLowerCase(),
   bcryptCost: isTest ? 4 : 12,

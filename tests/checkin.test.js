@@ -179,3 +179,30 @@ describe('releasing no-shows', () => {
     );
   }, { skip });
 });
+
+describe('campus rooms', () => {
+  beforeEach(resetDb);
+
+  test('a demo database switches to UCC rooms once, keeping the history of booked demo rooms', async () => {
+    const { switchToCampus, CAMPUSES } = require('../src/db/campus');
+    const a = await signedIn('ama@campus.test', 'lecturer');
+    await db.run(
+      `INSERT INTO bookings (room_id, user_id, title, category, date, start_time, end_time, attendees, status)
+       VALUES (?, ?, 'Old lecture', 'lecture', current_date - 3, '08:00', '10:00', 50, 'approved')`,
+      [await roomId('LT-1'), a.user.id],
+    );
+    const changed = await switchToCampus(db, 'ucc');
+    assert.deepEqual(changed, { deleted: 15, retired: 1, kept: 0 });
+    const old = await db.get("SELECT name, is_active FROM rooms WHERE code = 'DEMO-LT-1'");
+    assert.deepEqual(old, { name: 'Lecture Theatre 1 (demo)', is_active: false });
+    const lt1 = await db.get("SELECT bl.code FROM rooms r JOIN buildings bl ON bl.id = r.building_id WHERE r.code = 'LT-1'");
+    assert.equal(lt1.code, 'LT'); // the Science Lecture Theatre's LT 1, not the demo one
+    const { n } = await db.get("SELECT count(*)::int AS n FROM rooms WHERE is_active AND code NOT LIKE 'DEMO-%'");
+    assert.equal(n, CAMPUSES.ucc.rooms.length);
+    assert.equal((await db.get("SELECT count(*)::int AS n FROM buildings WHERE code IN ('SCB', 'NAB', 'LIB')")).n, 0);
+    // Empty UCC buildings are there for the office to add rooms to.
+    assert.ok(await db.get("SELECT 1 FROM buildings WHERE code = 'ELT'"));
+    // Every room code passes the same check as the Rooms page.
+    for (const [, code] of CAMPUSES.ucc.rooms) assert.match(code, /^[A-Z0-9][A-Z0-9-]*$/);
+  });
+});

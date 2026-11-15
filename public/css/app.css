@@ -1349,3 +1349,5 @@ kbd {
   .door-later__item { grid-template-columns: 96px minmax(0, 1fr); }
   .door-later__item .tag { grid-column: 2; justify-self: start; margin-left: 0; }
 }
+.rt-act { display: flex; justify-content: flex-end; gap: 12px; }
+a.button { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }

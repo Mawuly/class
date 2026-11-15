@@ -3,6 +3,7 @@
 const db = require('../db');
 const { AppError } = require('../utils/errors');
 const t = require('../utils/time');
+const { naturalCode } = require('../utils/sort');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const { TYPES } = require('./rooms');
@@ -106,7 +107,7 @@ async function overview() {
               AND (b.date > ? OR (b.date = ? AND b.end_time > ?)))::int AS upcoming
      FROM rooms r JOIN buildings bl ON bl.id = r.building_id
      LEFT JOIN bookings b ON b.room_id = r.id
-     GROUP BY r.id, bl.code, bl.name ORDER BY bl.code, r.code`,
+     GROUP BY r.id, bl.code, bl.name ORDER BY bl.code, ${naturalCode('r.code')}`,
     [today, today, now],
   );
   return { buildings, rooms, types: TYPES };

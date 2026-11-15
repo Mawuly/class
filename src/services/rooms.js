@@ -1,4 +1,5 @@
 'use strict';
+const { naturalCode } = require('../utils/sort');
 const db = require('../db');
 const { booking: rules } = require('../config');
 const { AppError } = require('../utils/errors');
@@ -30,7 +31,7 @@ async function list({ buildingId, type } = {}) {
   const args = [];
   if (buildingId) { where.push('r.building_id = ?'); args.push(Number(buildingId)); }
   if (type) { where.push('r.type = ?'); args.push(type); }
-  const rows = await db.all(`SELECT ${ROOM_COLUMNS} FROM ${ROOM_FROM} WHERE ${where.join(' AND ')} ORDER BY bl.code, r.code`, args);
+  const rows = await db.all(`SELECT ${ROOM_COLUMNS} FROM ${ROOM_FROM} WHERE ${where.join(' AND ')} ORDER BY bl.code, ${naturalCode('r.code')}`, args);
   return rows.map(shapeRoom);
 }
 
@@ -74,7 +75,7 @@ async function available(user, q) {
        AND NOT EXISTS (
          SELECT 1 FROM bookings b WHERE b.room_id = r.id AND b.date = ? AND b.status IN ${HOLDING}
            AND b.start_time < ? AND b.end_time > ?)
-     ORDER BY r.capacity ASC, r.code ASC`,
+     ORDER BY r.capacity ASC, ${naturalCode('r.code')}`,
     [...args, date, end, start],
   );
 
@@ -133,7 +134,7 @@ async function week(user, id, { date }) {
 async function now(at = new Date()) {
   const date = t.localDate(at);
   const time = t.localTime(at);
-  const rooms = await db.all("SELECT r.id, r.code, r.name FROM rooms r WHERE r.is_active ORDER BY r.code");
+  const rooms = await db.all(`SELECT r.id, r.code, r.name FROM rooms r WHERE r.is_active ORDER BY ${naturalCode('r.code')}`);
   const isOpen = time >= rules.open && time < rules.close;
   const bookings = await db.all(
     `SELECT room_id, start_time, end_time FROM bookings
@@ -163,7 +164,7 @@ async function now(at = new Date()) {
         : { code: r.code, text: 'free now', sort: 2 });
     }
   }
-  ticker.sort((a, b) => a.sort - b.sort || a.code.localeCompare(b.code));
+  ticker.sort((a, b) => a.sort - b.sort || a.code.localeCompare(b.code, 'en', { numeric: true }));
 
   return {
     date,

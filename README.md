@@ -100,14 +100,21 @@ Optional settings (Vercel → Settings → Environment Variables):
 | Name | What it does |
 |---|---|
 | `SEED_DEMO` | `true` adds demo lecturers, a demo student (`student@campus.test` / `Campus2026`) and sample bookings to an empty database. No demo admin is ever created on a deployment. |
+| `CAMPUS` | `ucc` (default): the University of Cape Coast's lecture buildings and rooms. `demo`: a small made-up campus. |
 | `CHECKIN_GRACE_MINUTES` | Minutes after the start a booking can be checked in to before it is released (5–60, default 15). |
 | `CHECKIN_RELEASE` | `off` keeps check-in but never releases bookings (useful while signs are being put up). |
 | `ALLOWED_EMAIL_DOMAIN` | e.g. `ug.edu.gh`: only addresses at that domain can register. |
 | `JWT_SECRET` | A long random string for signing logins. Optional: without it, one is derived from the database connection string. |
 
-To use your campus's real rooms, sign in at `/admin` and open **Rooms**: add your buildings and rooms,
-and delete the demo ones (any demo room that was never booked can be deleted; booked ones can be
-deactivated).
+The site comes with the University of Cape Coast's lecture rooms: NLT 1–20, SW 1–19, CAC 1–12 and
+Auditorium 900, LT 1–22, G1–G26, LLR 1–2, CoDE C1–C3, CRT 1–4, the S. K. Adjepong, Main and SMS
+auditoriums, and empty buildings for the Faculty of Education, School of Business, Science Roof Top and
+Assembly Hall Annex. **Seat counts are estimates**: correct them, and add rooms, in `/admin` → **Rooms**.
+A database set up with the old demo rooms switches over by itself on the next start (demo rooms that
+were booked are kept as `DEMO-…` for their history, and hidden once their bookings are over).
+
+To change rooms, sign in at `/admin` and open **Rooms**: edit seats, add rooms or buildings, deactivate
+rooms that aren't used for teaching (a room that was never booked can be deleted).
 
 ### Optional: password reset codes by text message (Arkesel)
 

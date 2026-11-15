@@ -1,4 +1,5 @@
 'use strict';
+const { naturalCode } = require('../utils/sort');
 const express = require('express');
 const bookings = require('../services/bookings');
 const roomAdmin = require('../services/roomAdmin');
@@ -142,7 +143,7 @@ router.get('/door-signs', async (req, res) => {
   const rooms = await db.all(
     `SELECT r.id, r.code, r.name, r.capacity, r.door_code, bl.code AS building_code, bl.name AS building_name
      FROM rooms r JOIN buildings bl ON bl.id = r.building_id
-     WHERE r.is_active ${one ? 'AND r.id = ?' : ''} ORDER BY bl.code, r.code`,
+     WHERE r.is_active ${one ? 'AND r.id = ?' : ''} ORDER BY bl.code, ${naturalCode('r.code')}`,
     one ? [one] : [],
   );
   if (one && !rooms.length) throw new AppError(404, 'Room not found');
