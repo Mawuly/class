@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { openSheet } from './sheet.js';
+import { showBoard, hideBoard } from './board.js';
 import { $, $$, h, isoDate, hhmm, toMin, fromMin, longDate, showError } from './util.js';
 
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -277,7 +278,6 @@ async function enterApp(user) {
   state.meta ??= await api('/rooms/meta');
   document.body.classList.replace('is-landing', 'is-app');
   $('[data-view="landing"]').hidden = true;
-  $('[data-view="dashboard"]').hidden = false;
   $('[data-signed-in]').hidden = false;
   $('[data-user-name]').textContent = `${user.name} · ${user.role}`;
   $('[data-greeting]').textContent = greeting(user.name);
@@ -285,7 +285,23 @@ async function enterApp(user) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
   fillStartOptions();
-  await loadDashboard();
+  await route();
+}
+
+/** Signed-in pages: "#/" is the dashboard, "#/board" the day board. */
+async function route() {
+  if (!state.user) return;
+  const page = location.hash === '#/board' ? 'board' : 'dashboard';
+  $('[data-view="dashboard"]').hidden = page !== 'dashboard';
+  $('[data-view="board"]').hidden = page !== 'board';
+  document.body.classList.toggle('is-board', page === 'board');
+  for (const a of $$('[data-nav]')) a.toggleAttribute('aria-current', a.dataset.nav === page);
+  if (page === 'board') {
+    showBoard({ user: state.user, rules: state.meta.rules, buildings: state.meta.buildings });
+  } else {
+    hideBoard();
+    await loadDashboard();
+  }
 }
 
 function leaveApp() {
@@ -293,7 +309,10 @@ function leaveApp() {
   document.body.classList.replace('is-app', 'is-landing');
   $('[data-view="landing"]').hidden = false;
   $('[data-view="dashboard"]').hidden = true;
+  $('[data-view="board"]').hidden = true;
   $('[data-signed-in]').hidden = true;
+  document.body.classList.remove('is-board');
+  hideBoard();
   switchForm('login');
 }
 
@@ -309,6 +328,7 @@ function init() {
   $('[data-form="login"]').addEventListener('submit', (e) => { e.preventDefault(); submitAuth(e.target, '/auth/login'); });
   $('[data-form="register"]').addEventListener('submit', (e) => { e.preventDefault(); submitAuth(e.target, '/auth/register'); });
   for (const b of $$('[data-switch]')) b.addEventListener('click', () => switchForm(b.dataset.switch));
+  window.addEventListener('hashchange', () => { route(); });
   $('[data-form="find"]').addEventListener('submit', (e) => { e.preventDefault(); findRooms(e.target); });
   $('[data-sign-out]').addEventListener('click', async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});

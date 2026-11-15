@@ -25,7 +25,9 @@
     <a class="brand" href="/">Lecture Rooms</a>
     <span class="clock mono" data-clock></span>
     <span class="live"><span class="live__dot"></span>LIVE</span>
-    <nav class="topbar__nav" data-signed-in hidden>
+    <nav class="topbar__nav" data-signed-in hidden aria-label="Main">
+      <a class="topbar__link" href="#/" data-nav="dashboard">Dashboard</a>
+      <a class="topbar__link" href="#/board" data-nav="board">Day board</a>
       <span class="topbar__who" data-user-name></span>
       <button class="link-button" type="button" data-sign-out>Sign out</button>
     </nav>
@@ -127,6 +129,35 @@
       <h2 class="panel__title" id="upcoming-title">Coming up</h2>
       <ol class="rows" data-upcoming></ol>
     </section>
+  </main>
+
+  <!-- Day board: every room in a building against the hours of one day ----------------- -->
+  <main class="board-view" data-view="board" hidden>
+    <div class="board-bar">
+      <div class="board-bar__heading">
+        <h1 class="serif board-bar__title" data-board-heading>Day board</h1>
+        <p class="mono board-bar__summary" data-board-summary></p>
+      </div>
+      <div class="board-bar__controls">
+        <div class="day-nav" role="group" aria-label="Choose a day">
+          <button class="button button--secondary day-nav__step" type="button" data-day-step="-1" aria-label="Previous day">‹</button>
+          <button class="button button--secondary" type="button" data-day-today>Today</button>
+          <button class="button button--secondary day-nav__step" type="button" data-day-step="1" aria-label="Next day">›</button>
+          <input type="date" class="mono day-nav__date" data-board-date aria-label="Date">
+        </div>
+        <select data-board-building aria-label="Building"></select>
+      </div>
+      <ul class="legend" aria-label="Key">
+        <li><span class="swatch swatch--free"></span>Free</li>
+        <li><span class="swatch swatch--approved"></span>Booked</li>
+        <li><span class="swatch swatch--pending"></span>Awaiting approval</li>
+        <li><span class="swatch swatch--approved"><b>■</b></span>Yours</li>
+      </ul>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <div class="board" data-board></div>
+    <p class="board-hint" data-board-hint>Click an empty slot to book it, or drag across slots for longer. With the keyboard: Tab to a room, arrow keys to pick a time, Enter to book.</p>
+    <p class="visually-hidden" aria-live="polite" data-board-live></p>
   </main>
 
   <!-- Booking sheet: slides in from the right over the dimmed page ------------------- -->

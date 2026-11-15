@@ -16,7 +16,11 @@ Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Ver
 - Booking sheet: book or request a room from the search results; clashes are shown inline with a one-click
   "Try 10:00–12:00?" suggestion; bookings can be cancelled from the dashboard
 
-Next: day board and week view pages, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
+- Day board: every room against the hours of one day, with a live current-time line. Click an empty
+  slot to book it, drag for longer, or use the keyboard; staff-only rooms are locked for students;
+  past time is dimmed; filter by building and step through days
+
+Next: room week view, recurring bookings, admin pages for rooms, users, stats and audit log, calendar export.
 
 ## Run it locally
 

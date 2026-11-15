@@ -404,6 +404,162 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.9); opac
 .row__cancel { font-size: 12px; color: var(--text-muted); }
 .row__cancel:hover { color: var(--text-strong); }
 
+/* ---------- Navigation --------------------------------------------------------------- */
+
+.topbar__link {
+  color: var(--text-muted); text-decoration: none; font-size: 13px;
+  padding: 6px 2px; border-bottom: 1px solid transparent;
+}
+.topbar__link:hover { color: var(--text-strong); }
+.topbar__link[aria-current] { color: var(--text-strong); border-bottom-color: var(--bone); }
+
+/* On the board the top bar stays put, as glass over the scrolling page. */
+.is-board .topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid var(--line);
+}
+@media (prefers-reduced-transparency: reduce) { .is-board .topbar { background: var(--solid-bg); backdrop-filter: none; } }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- Day board ----------------------------------------------------------------- */
+
+.board-view { padding: 20px var(--gutter) var(--gutter); animation: rise .4s var(--ease) both; }
+
+.board-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; margin-bottom: 18px; }
+.board-bar__title { font-size: clamp(28px, 3.4vw, 40px); line-height: 1.05; letter-spacing: -0.02em; }
+.board-bar__summary { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+.board-bar__controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.board-bar__controls select { width: auto; min-width: 200px; }
+
+.day-nav { display: flex; gap: 6px; align-items: center; }
+.day-nav .button { min-height: 38px; padding: 0 12px; }
+.day-nav__step { font-family: var(--mono); font-size: 18px; }
+.day-nav__date { width: 150px; min-height: 38px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 0 auto; padding: 0; list-style: none; font-size: 12px; color: var(--text-muted); }
+.legend li { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { position: relative; display: inline-grid; place-items: center; width: 22px; height: 14px; border-radius: 3px; }
+.swatch b { font-size: 7px; color: var(--ink); }
+.swatch--free { border: 1px solid var(--line); }
+.swatch--approved { background: rgb(var(--bone-rgb) / 0.85); }
+.swatch--pending {
+  border: 1px dashed rgb(var(--bone-rgb) / 0.7);
+  background: repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.35) 0 2px, transparent 2px 5px);
+}
+
+/* Data screens use a solid surface: timetables are hard to read over moving footage. */
+.board {
+  --label: 168px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  background: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-panel);
+}
+.board__inner { min-width: calc(var(--label) + var(--slots) * 34px); }
+
+.board__head {
+  display: grid; grid-template-columns: var(--label) 1fr;
+  position: sticky; top: 0; z-index: 5;
+  background: var(--ink); border-bottom: 1px solid var(--line);
+}
+.board__corner {
+  position: sticky; left: 0; z-index: 6; padding: 12px 14px;
+  background: var(--ink); border-right: 1px solid var(--line);
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted);
+}
+.board__hours { position: relative; height: 38px; }
+.board__hour { position: absolute; bottom: 9px; transform: translateX(4px); font-size: 12px; color: var(--text-muted); }
+.now-label {
+  position: absolute; top: 4px; transform: translateX(-50%); z-index: 2;
+  padding: 1px 5px; border-radius: 3px;
+  background: var(--bone); color: var(--ink); font-size: 11px; font-weight: 500;
+}
+
+.board__body { position: relative; }
+.board__group {
+  position: sticky; left: 0; width: max-content;
+  padding: 14px 14px 6px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted);
+}
+.board__row { display: grid; grid-template-columns: var(--label) 1fr; border-top: 1px solid var(--line); }
+.board__room {
+  position: sticky; left: 0; z-index: 4;
+  display: grid; grid-template-columns: auto 1fr; align-content: center; gap: 0 6px;
+  padding: 8px 14px; min-height: 52px;
+  background: var(--ink); border-right: 1px solid var(--line);
+}
+.board__code { font-size: 14px; color: var(--text-strong); }
+.board__cap { font-size: 12px; color: var(--text-muted); }
+.board__name { grid-column: 1 / -1; font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* One thin line every 30 minutes, a slightly stronger one on the hour. */
+.track {
+  position: relative; min-height: 52px; cursor: cell; touch-action: pan-x pan-y;
+  background-image:
+    linear-gradient(to right, rgb(var(--bone-rgb) / 0.10) 1px, transparent 1px),
+    linear-gradient(to right, rgb(var(--bone-rgb) / 0.045) 1px, transparent 1px);
+  background-size: calc(200% / var(--slots)) 100%, calc(100% / var(--slots)) 100%;
+}
+.track:focus-visible { outline: 2px solid var(--bone); outline-offset: -2px; }
+.track--locked { cursor: not-allowed; }
+/* Staff-only rooms, seen by a student: faint diagonal lines over the whole row. */
+.track--locked::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.05) 0 1px, transparent 1px 9px);
+}
+.board__row:has(.track--locked) .board__code { color: var(--text-muted); }
+.board__name em { font-style: normal; color: var(--text-strong); }
+
+/* Time that has passed: a dark veil over the grid and any bookings in it. */
+.track__past {
+  position: absolute; inset: 0 auto 0 0; z-index: 2; pointer-events: none;
+  background: rgb(var(--ink-rgb) / 0.62);
+  border-right: 1px dashed rgb(var(--bone-rgb) / 0.12);
+}
+
+.block {
+  position: absolute; top: 6px; bottom: 6px; z-index: 1;
+  display: grid; align-content: center; gap: 1px;
+  padding: 3px 8px; overflow: hidden; border-radius: 4px; cursor: default;
+  font-size: 12px; line-height: 1.25;
+}
+.block__title, .block__time { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.block__time { font-size: 10px; opacity: .75; }
+.block--approved { background: rgb(var(--bone-rgb) / 0.85); color: var(--ink); }
+.block--pending {
+  color: var(--text-strong);
+  border: 1px dashed rgb(var(--bone-rgb) / 0.7);
+  background: repeating-linear-gradient(-45deg, rgb(var(--bone-rgb) / 0.2) 0 2px, transparent 2px 7px), rgb(var(--ink-rgb) / 0.6);
+}
+.block--mine { box-shadow: inset 0 0 0 2px var(--ink); }
+
+.ghost {
+  position: absolute; top: 6px; bottom: 6px; z-index: 3; pointer-events: none;
+  border: 1px solid var(--bone); border-radius: 4px; background: rgb(var(--bone-rgb) / 0.1);
+}
+/* The label sits just above the selection, so a single 30-minute slot still shows its full time. */
+.ghost__label {
+  position: absolute; left: -1px; bottom: calc(100% + 3px);
+  padding: 2px 6px; border-radius: 3px;
+  background: var(--bone); color: var(--ink);
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+}
+.board__row:first-of-type .ghost__label { bottom: auto; top: calc(100% + 3px); }
+.board__hour.is-covered { visibility: hidden; }
+
+.now-line {
+  position: absolute; top: 0; bottom: 0; z-index: 2; width: 2px; pointer-events: none;
+  left: calc(var(--label) + (100% - var(--label)) * var(--p) / 100 - 1px);
+  background: var(--bone);
+}
+
+.board-hint { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+.board-view > .alert { margin-bottom: 12px; }
+
 /* ---------- Small screens ------------------------------------------------------------- */
 
 @media (max-width: 960px) {
@@ -429,6 +585,15 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.9); opac
   .field-row--3 { grid-template-columns: 1fr 1fr; }
   .field-row--3 .field:first-child { grid-column: 1 / -1; }
   .topbar__who { display: none; }
+  .topbar__nav { width: 100%; margin-left: 0; gap: 18px; }
+  .topbar__nav .link-button { margin-left: auto; }
+  .board { --label: 92px; }
+  .board__name { display: none; }
+  .board__room { grid-template-columns: 1fr; padding: 8px 10px; }
+  .board__corner { padding: 12px 10px; letter-spacing: 0.08em; }
+  .board__inner { min-width: calc(var(--label) + var(--slots) * 30px); }
+  .legend { margin-left: 0; }
+  .board-bar__controls select { min-width: 0; flex: 1 1 100%; }
 }
 
 /* ---------- Motion preferences --------------------------------------------------------- */
