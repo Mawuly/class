@@ -178,7 +178,7 @@ router.get('/rooms/:id/door-qr.svg', async (req, res) => {
   const room = await db.get('SELECT door_code FROM rooms WHERE id = ?', [parseId(req.params.id, 'Room')]);
   if (!room) throw new AppError(404, 'Room not found');
   const svg = await QRCode.toString(doorUrl(req, room.door_code), {
-    type: 'svg', errorCorrectionLevel: 'M', margin: 2, color: { dark: '#12161C', light: '#ffffff00' }, // clear background: prints on paper, shows on Bone
+    type: 'svg', errorCorrectionLevel: 'M', margin: 2, color: { dark: '#092b54', light: '#ffffff00' }, // clear background: prints on paper, shows on Bone
   });
   res.type('image/svg+xml').set('Cache-Control', 'private, no-store').send(svg);
 });

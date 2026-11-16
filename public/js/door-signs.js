@@ -7,9 +7,11 @@ const roomId = new URLSearchParams(location.search).get('room');
 
 function sign(s, rules) {
   return h('article', { class: 'sign' },
-    h('p', { class: 'sign__brand serif' }, 'Lecture Rooms'),
+    h('header', { class: 'sign__band' },
+      h('span', { class: 'sign__crest' }, 'UCC'),
+      h('span', { class: 'sign__brand' }, 'UCC Spaces', h('small', {}, 'University of Cape Coast'))),
     h('p', { class: 'sign__code mono' }, s.code),
-    h('p', { class: 'sign__name' }, `${s.name} · ${s.building_name} · ${s.capacity} seats`),
+    h('p', { class: 'sign__name' }, [...new Set([s.name, s.building_name])].join(' · ') + ` · ${s.capacity} seats`),
     h('img', { class: 'sign__qr', src: `/api/admin/rooms/${s.id}/door-qr.svg?v=${s.door_code}`, alt: `QR code for ${s.code}`, width: '240', height: '240' }),
     h('p', { class: 'sign__scan' }, 'Scan to check in, or to book this room'),
     h('p', { class: 'sign__alt' }, 'No camera? On the website, open your booking, press Check in and type',
@@ -25,7 +27,7 @@ async function load() {
   try {
     const { signs, checkIn } = await api(`/admin/door-signs${roomId ? `?room=${encodeURIComponent(roomId)}` : ''}`);
     $('[data-signs-title]').textContent = roomId && signs[0] ? `Door sign · ${signs[0].code}` : `Door signs · ${signs.length} rooms`;
-    document.title = roomId && signs[0] ? `${signs[0].code} · Door Sign` : 'Door Signs';
+    document.title = roomId && signs[0] ? `${signs[0].code} · Door sign · UCC Spaces` : 'Door signs · UCC Spaces';
     $('[data-signs]').replaceChildren(...signs.map((s) => sign(s, checkIn)));
   } catch (err) {
     showError(document, err.status === 401 || err.status === 403
