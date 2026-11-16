@@ -240,3 +240,17 @@ access with their letter as before. If someone signs in with Google using the em
 account, the accounts are linked, and the old password stops working (sign-up never proved who owned
 that email; Google has). They keep using Google, or set a new password with "Forgot password".
 With `ALLOWED_EMAIL_DOMAIN` set, only Google accounts at that domain can sign in.
+
+
+## Location check at check-in
+
+When someone checks in (door QR code or typed code), the phone is asked for its location. The check-in
+always goes through; it is only **labelled** for the timetable office: at the building, away from it
+(with the distance), location not shared, or building location not set. Only the label and the distance
+are stored, never anyone's coordinates. Flagged check-ins are listed on **Statistics → Check-in
+location** and in the audit log.
+
+Set each building's location once in `/admin` → Rooms → **Edit building**: stand at the building and
+press **Use my current location**, or paste the coordinates from Google Maps (right-click the
+building). The radius (default 150 m) is how far away still counts as "at the building"; the phone's
+own uncertainty (up to 100 m) is allowed on top.

@@ -1,6 +1,7 @@
 // UCC Spaces: the public site. Rooms come from the API, sign-in is the university account,
 // and every booking is written to the database. Admin tools live at /admin.
 import { api } from './api.js';
+import { currentPosition, locationNote } from './location.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -494,9 +495,11 @@ $('checkin-form').addEventListener('submit', async (e) => {
   submit.disabled = true;
   $('checkin-error').textContent = '';
   try {
-    await api('/door/check-in', { method: 'POST', body: { code, via: 'code' } });
+    // The phone's position only labels the check-in for the timetable office; it never blocks it.
+    const position = await currentPosition();
+    const res = await api('/door/check-in', { method: 'POST', body: { code, via: 'code', position } });
     $('checkin-dialog').close();
-    toast(`Checked in to ${checkInTarget?.room_code || 'your room'}.`);
+    toast(`Checked in to ${checkInTarget?.room_code || 'your room'}. ${locationNote(res.location)}`.trim());
     await loadBookings();
   } catch (err) {
     $('checkin-error').textContent = err.message;

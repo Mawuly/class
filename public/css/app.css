@@ -1381,3 +1381,6 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; jus
   .closure { grid-template-columns: 80px minmax(0, 1fr); }
   .closure__why { grid-column: 1 / -1; }
 }
+.flagged { margin-top: 18px; }
+.flagged__summary { margin: 4px 0 10px; font-size: 14px; color: var(--text-strong); }
+.flagged__note { margin-bottom: 10px; font-size: 13px; color: var(--text-muted); }

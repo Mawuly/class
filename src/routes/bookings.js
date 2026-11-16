@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { parseId } = require('../utils/validate');
 const calendar = require('../services/calendar');
 const { sendIcs, baseUrl } = require('./calendar');
+const { checkInState } = require('../services/checkin');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -34,8 +35,23 @@ router.get('/:id/calendar.ics', async (req, res) => {
   sendIcs(res, one.body, `${one.room}_${one.date}.ics`);
 });
 
+// Each booking carries its check-in state, which the main site's "My bookings" page reads:
+// check_in_state (early, open, checked-in, checked-out, released, not-approved, ended),
+// check_in_opens_at and check_in_by.
 router.get('/mine', async (req, res) => {
-  res.json({ bookings: await bookings.listMine(req.user, req.query.scope) });
+  const now = new Date();
+  const list = await bookings.listMine(req.user, req.query.scope);
+  res.json({
+    bookings: list.map((b) => {
+      const s = checkInState(b, now);
+      return {
+        ...b,
+        check_in_state: b.checked_out_at ? 'checked-out' : s.state,
+        check_in_opens_at: s.opensAt,
+        check_in_by: s.deadline,
+      };
+    }),
+  });
 });
 
 // Leaving early: ends the booking now and frees the rest of the slot.

@@ -366,6 +366,16 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_out_at timestamptz;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub text;
 CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_key ON users (google_sub) WHERE google_sub IS NOT NULL;
 
+-- Location check at check-in (schema version 14). Each building can have a map position and a
+-- radius; a check-in is labelled by how far the phone was from the building. Only the label and
+-- the distance are kept, never the person's coordinates. The label never blocks a check-in.
+ALTER TABLE buildings ADD COLUMN IF NOT EXISTS latitude  double precision CHECK (latitude BETWEEN -90 AND 90);
+ALTER TABLE buildings ADD COLUMN IF NOT EXISTS longitude double precision CHECK (longitude BETWEEN -180 AND 180);
+ALTER TABLE buildings ADD COLUMN IF NOT EXISTS radius_m  integer NOT NULL DEFAULT 150 CHECK (radius_m BETWEEN 30 AND 2000);
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_location   text CHECK (checkin_location IN ('near', 'far', 'unknown', 'unchecked'));
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_distance_m integer;
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_accuracy_m integer;
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

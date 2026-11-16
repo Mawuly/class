@@ -396,3 +396,5 @@ kbd { border-color: #c9d4e2; border-radius: 4px; font-family: 'IBM Plex Sans', s
   .topbar, .tabs, .queue-keys { display: none !important; }
   body { background: #fff; }
 }
+.flagged__summary { color: #182c44; }
+.flagged__note { color: #6c7b8f; }

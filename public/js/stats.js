@@ -124,7 +124,41 @@ function attendanceTile(a, tile) {
   const parts = [`${num(a.checkedIn)} of ${num(a.total)} bookings`];
   if (a.released) parts.push(`${num(a.released)} no-show${a.released === 1 ? '' : 's'} released`);
   if (a.missed) parts.push(`${num(a.missed)} ended unchecked`);
+  const flagged = (a.location?.far || 0) + (a.location?.unknown || 0);
+  if (flagged) parts.push(`⚠ ${num(flagged)} flagged by location`);
   return tile('Checked in', pct(a.rate), parts.join(' · '));
+}
+
+const metres = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`);
+
+/* Check-ins the location check flagged: away from the building, or no location shared. Never blocked. */
+function locationPanel(a) {
+  const loc = a?.location;
+  if (!loc) return '';
+  const counted = loc.near + loc.far + loc.unknown + loc.unchecked;
+  const summary = counted
+    ? `${num(loc.near)} at the building · ${num(loc.far)} away from it · ${num(loc.unknown)} without location`
+      + `${loc.unchecked ? ` · ${num(loc.unchecked)} in buildings with no location set` : ''}`
+    : 'No check-ins in this period yet.';
+  return h('section', { class: 'panel stat-card flagged', 'aria-labelledby': 'card-flagged' },
+    h('header', { class: 'stat-card__head' },
+      h('div', {},
+        h('h2', { class: 'stat-card__title', id: 'card-flagged' }, 'Check-in location'),
+        h('p', { class: 'stat-card__sub' }, 'Where phones were at check-in. Flagged check-ins still count; this list is for follow-up.'))),
+    h('p', { class: 'flagged__summary' }, summary),
+    loc.buildingsWithoutLocation
+      ? h('p', { class: 'flagged__note' }, `${loc.buildingsWithoutLocation} building${loc.buildingsWithoutLocation === 1 ? ' has' : 's have'} no location yet, `
+        + 'so check-ins there can\'t be checked. Set it in Rooms → Edit building.')
+      : '',
+    loc.flagged.length
+      ? table('Flagged check-ins', ['Person', 'Room', 'Booking', 'Checked in', 'Location'], loc.flagged.map((f) => [
+        `${f.user_name} · ${f.user_email}`,
+        f.room_code,
+        `${longDate(f.date)} ${f.start_time}–${f.end_time}`,
+        new Date(f.checked_in_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        f.location === 'far' ? `${metres(f.distance_m)} away` : 'not shared',
+      ]))
+      : '');
 }
 
 /* Busiest hours: columns, the busiest at full strength (emphasis form), value on its cap only. */
@@ -232,7 +266,8 @@ function render() {
         () => h('div', {}, roomsNote(d), roomsChart(d)),
         () => table('Room utilisation', ['Room', 'Seats', 'Bookings', 'Hours', 'Utilisation', 'Avg seats used'],
           d.rooms.map((x) => [`${x.code} · ${x.name}`, num(x.capacity), num(x.bookings), hrs(x.hours), pct(x.utilisation), x.minutes ? `${Math.round(x.avg_fill * 100)}%` : '—'])),
-        csv)));
+        csv)),
+    locationPanel(d.attendance));
 }
 
 async function load() {

@@ -68,7 +68,8 @@ function render() {
         h('div', { class: 'rt-group__head' },
           h('span', { class: 'mono rt-group__code' }, b.code),
           h('span', { class: 'rt-group__name' }, b.name),
-          h('span', { class: 'mono rt-group__count' }, `${b.room_count} room${b.room_count === 1 ? '' : 's'}`),
+          h('span', { class: 'mono rt-group__count' }, `${b.room_count} room${b.room_count === 1 ? '' : 's'}`
+            + `${b.room_count && b.latitude == null ? ' · no location for check-in' : ''}`),
           h('button', { class: 'link-button', type: 'button', 'aria-label': `Edit building ${b.code}`, onclick: () => openBuilding(b) }, 'Edit building'),
           h('button', { class: 'link-button', type: 'button', onclick: () => openRoom(null, b.id) }, '+ Room here')),
         list.length
@@ -323,8 +324,41 @@ function openBuilding(b) {
   const editing = Boolean(b);
   const code = h('input', { class: 'mono', maxlength: '12', required: true, placeholder: 'ENG', value: b?.code || '', autocapitalize: 'characters' });
   const name = h('input', { maxlength: '80', required: true, placeholder: 'Engineering Block', value: b?.name || '' });
+  // Map position for the location check at check-in (optional).
+  const coords = h('input', {
+    class: 'mono', inputmode: 'decimal', autocomplete: 'off', placeholder: 'e.g. 5.1036, -1.2829',
+    value: b?.latitude != null ? `${b.latitude}, ${b.longitude}` : '',
+  });
+  const radius = h('input', { class: 'mono', type: 'number', min: '30', max: '2000', step: '10', value: String(b?.radius_m ?? 150) });
+  const here = h('button', { class: 'button button--secondary', type: 'button' }, 'Use my current location');
+  const hereNote = h('p', { class: 'field__hint', role: 'status' });
+  here.addEventListener('click', () => {
+    if (!('geolocation' in navigator)) { hereNote.textContent = 'This browser can\'t share its location. Paste the coordinates instead.'; return; }
+    here.disabled = true;
+    hereNote.textContent = 'Finding your location…';
+    navigator.geolocation.getCurrentPosition((p) => {
+      coords.value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`;
+      hereNote.textContent = `Got it (accurate to about ${Math.round(p.coords.accuracy)} m). Save to keep it.`;
+      here.disabled = false;
+    }, (err) => {
+      hereNote.textContent = err.code === 1 ? 'Location permission was refused. Allow it in the browser, or paste the coordinates.' : 'Couldn\'t get a location. Try again outside, or paste the coordinates.';
+      here.disabled = false;
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+  const location = () => {
+    const raw = coords.value.trim();
+    if (!raw) return { latitude: '', longitude: '' };
+    const [lat, lng] = raw.split(/[,\s]+/).filter(Boolean);
+    return { latitude: lat ?? '', longitude: lng ?? '' };
+  };
   const form = h('form', { class: 'form', novalidate: true },
     h('div', { class: 'field-row' }, field('Code', code, 'Short, e.g. SCB'), field('Name', name)),
+    h('h3', { class: 'panel__title' }, 'Location for check-in'),
+    h('p', { class: 'field__hint' }, 'Check-ins more than the radius away from this point are flagged for you (never blocked). '
+      + 'Stand at the building and use your location, or in Google Maps right-click the building and copy its coordinates.'),
+    h('div', { class: 'field-row' }, field('Latitude, longitude', coords), field('Radius (metres)', radius, 'Default 150')),
+    h('div', { class: 'sheet__actions' }, here),
+    hereNote,
     errorBox(),
     h('div', { class: 'sheet__actions' },
       h('button', { class: 'button button--primary', type: 'submit' }, editing ? 'Save changes' : 'Add building'),
@@ -333,8 +367,9 @@ function openBuilding(b) {
     e.preventDefault();
     showError(form, '');
     try {
-      if (editing) await api(`/admin/buildings/${b.id}`, { method: 'PATCH', body: { code: code.value, name: name.value } });
-      else await api('/admin/buildings', { method: 'POST', body: { code: code.value, name: name.value } });
+      const body = { code: code.value, name: name.value, ...location(), radiusM: radius.value };
+      if (editing) await api(`/admin/buildings/${b.id}`, { method: 'PATCH', body });
+      else await api('/admin/buildings', { method: 'POST', body });
       closeSheet();
       await changed();
     } catch (err) {

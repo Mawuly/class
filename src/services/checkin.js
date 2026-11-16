@@ -12,6 +12,7 @@ const t = require('../utils/time');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const { canBook } = require('./rooms');
+const geo = require('../utils/geo');
 
 const rules = config.booking;
 const HOLDING = "('pending', 'approved')";
@@ -87,7 +88,7 @@ async function roomByCode(raw) {
   const code = normaliseCode(raw);
   const room = code && await db.get(
     `SELECT r.id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by, r.door_code,
-            bl.code AS building_code, bl.name AS building_name
+            bl.code AS building_code, bl.name AS building_name, bl.latitude, bl.longitude, bl.radius_m
      FROM rooms r JOIN buildings bl ON bl.id = r.building_id
      WHERE r.door_code = ? AND r.is_active`,
     [code],
@@ -100,7 +101,7 @@ async function roomByCode(raw) {
  * Checks the signed-in person in to their booking in the room whose door code they gave.
  * Works from 10 minutes before the start until the grace period ends.
  */
-async function checkIn(user, rawCode, { via = 'code', ip } = {}) {
+async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}) {
   const now = new Date();
   const room = await roomByCode(rawCode);
   await releaseNoShows(now);
@@ -129,17 +130,24 @@ async function checkIn(user, rawCode, { via = 'code', ip } = {}) {
   }
   if (s.state === 'checked-in') return { booking: { ...b, room_code: room.code }, alreadyCheckedIn: true };
 
+  // Where the phone was, compared with the building. Only labels the check-in; never blocks it.
+  const where = geo.label(room, position);
+
   const updated = await db.tx(async (x) => {
     const row = await x.get(
-      `UPDATE bookings SET checked_in_at = ? WHERE id = ? AND status = 'approved' AND checked_in_at IS NULL
-       RETURNING id, title, date, start_time, end_time, status, checked_in_at`,
-      [now, b.id],
+      `UPDATE bookings SET checked_in_at = ?, checkin_location = ?, checkin_distance_m = ?, checkin_accuracy_m = ?
+       WHERE id = ? AND status = 'approved' AND checked_in_at IS NULL
+       RETURNING id, title, date, start_time, end_time, status, checked_in_at, checkin_location, checkin_distance_m`,
+      [now, where.state, where.distance, where.accuracy, b.id],
     );
-    if (row) await audit({ userId: user.id, action: 'booking.check_in', entity: 'booking', entityId: b.id, details: { via }, ip }, x);
+    if (row) {
+      await audit({ userId: user.id, action: 'booking.check_in', entity: 'booking', entityId: b.id,
+        details: { via, location: where.state, ...(where.distance != null ? { distance_m: where.distance } : {}) }, ip }, x);
+    }
     return row;
   });
   if (!updated) throw new AppError(409, 'This booking changed while you were checking in. Please try again.');
-  return { booking: { ...updated, room_code: room.code }, alreadyCheckedIn: false };
+  return { booking: { ...updated, room_code: room.code }, alreadyCheckedIn: false, location: { state: where.state, distance: where.distance } };
 }
 
 /**

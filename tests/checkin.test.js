@@ -150,7 +150,9 @@ describe('releasing no-shows', () => {
   test('the door page offers booking from the next half hour, up to the next booking', async () => {
     const owner = await signedIn('ama@campus.test', 'lecturer');
     const slot = Math.ceil(minuteOfDay / 30) * 30;
-    if (slot >= 20 * 60) return; // after 20:00 there may be no full hour left
+    // Only while rooms are open, with two hours left before closing (06:30–20:30 by default).
+    const { open, close } = require('../src/config').booking;
+    if (slot < toMinutes(open) || slot + 120 > toMinutes(close)) return;
     await db.run(
       `INSERT INTO bookings (room_id, user_id, title, category, date, start_time, end_time, attendees, status)
        VALUES (?, ?, 'Seminar', 'meeting', ?, ?, ?, 4, 'approved')`,
@@ -205,4 +207,81 @@ describe('campus rooms', () => {
     // Every room code passes the same check as the Rooms page.
     for (const [, code] of CAMPUSES.ucc.rooms) assert.match(code, /^[A-Z0-9][A-Z0-9-]*$/);
   });
+});
+
+describe('location check at check-in (flags, never blocks)', () => {
+  beforeEach(resetDb);
+  const geo = require('../src/utils/geo');
+
+  test('distance and labels', () => {
+    const building = { latitude: 5.1036, longitude: -1.2829, radius_m: 150 };
+    assert.equal(geo.distanceM({ lat: 5.1036, lng: -1.2829 }, { lat: 5.1045, lng: -1.2829 }), 100);
+    assert.equal(geo.label(building, { lat: 5.1045, lng: -1.2829, accuracy: 20 }).state, 'near');
+    // 220 m away, but the phone is only sure to 80 m: 150 + 80 covers it.
+    assert.equal(geo.label(building, { lat: 5.1056, lng: -1.2829, accuracy: 80 }).state, 'near');
+    const far = geo.label(building, { lat: 5.1136, lng: -1.2829, accuracy: 15 });
+    assert.deepEqual([far.state, far.distance], ['far', 1112]);
+    assert.equal(geo.label(building, null).state, 'unknown');
+    assert.equal(geo.label(building, { lat: 5.1, lng: -1.28, accuracy: 3000 }).state, 'unknown');
+    assert.equal(geo.label(building, { lat: 'x', lng: 1 }).state, 'unknown');
+    assert.equal(geo.label({ latitude: null, longitude: null, radius_m: 150 }, { lat: 5.1, lng: -1.28 }).state, 'unchecked');
+  });
+
+  test('the label and distance are saved, logged and shown in statistics; check-in always works', async () => {
+    const admin = await signedIn('boss@campus.test');
+    const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
+    const set = await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '5.1036', longitude: '-1.2829', radiusM: 100 });
+    assert.equal(set.status, 200);
+    const people = await Promise.all(['ama', 'kofi', 'esi'].map((n) => signedIn(`${n}@campus.test`)));
+    const rooms = ['LIB-S1', 'LIB-S2', 'LIB-S3'];
+    for (let i = 0; i < 3; i++) await bookingAt(people[i].user, rooms[i], -5);
+    const positions = [{ lat: 5.1037, lng: -1.2829, accuracy: 10 }, { lat: 5.1236, lng: -1.2829, accuracy: 10 }, undefined];
+    const states = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await people[i].post('/api/door/check-in').send({ code: await doorCode(rooms[i]), position: positions[i] });
+      assert.equal(res.status, 200, 'never blocked');
+      states.push(res.body.location.state);
+    }
+    assert.deepEqual(states, ['near', 'far', 'unknown']);
+    const far = await db.get("SELECT checkin_location, checkin_distance_m FROM bookings WHERE checkin_location = 'far'");
+    assert.equal(far.checkin_distance_m, 2224);
+    const log = await db.get("SELECT details FROM audit_log WHERE action = 'booking.check_in' AND details->>'location' = 'far'");
+    assert.equal(log.details.distance_m, 2224);
+    const audit = await admin.get('/api/admin/audit?group=bookings');
+    assert.ok(audit.body.entries.some((e) => /2\.2 km from the building/.test(e.detail)));
+    const stats = await admin.get(`/api/admin/stats?from=${localDate()}&to=${localDate()}`);
+    const loc = stats.body.attendance.location;
+    assert.deepEqual([loc.near, loc.far, loc.unknown], [1, 1, 1]);
+    assert.deepEqual(loc.flagged.map((f) => f.location).sort(), ['far', 'unknown']);
+    // No coordinates of the person are stored anywhere.
+    const cols = (await db.all("SELECT column_name FROM information_schema.columns WHERE table_name = 'bookings'")).map((c) => c.column_name);
+    assert.ok(!cols.some((c) => /lat|lng|longitude/.test(c)));
+  }, { skip });
+
+  test('building locations must make sense', async () => {
+    const admin = await signedIn('boss@campus.test');
+    const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
+    assert.match((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '95', longitude: '1' })).body.error, /latitude/);
+    assert.match((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ radiusM: 5 })).body.error, /30 to 2000/);
+    assert.equal((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '', longitude: '' })).status, 200);
+  });
+});
+
+describe('"My bookings" shows check-in state', () => {
+  beforeEach(resetDb);
+
+  test('each booking says whether check-in is open, done, or not yet', async () => {
+    const a = await signedIn('kofi@campus.test');
+    const now = await bookingAt(a.user, 'LIB-S1', -5);
+    const later = await bookingAt(a.user, 'LIB-S2', 120);
+    let list = (await a.get('/api/bookings/mine')).body.bookings;
+    const byId = (id) => list.find((b) => b.id === id);
+    assert.equal(byId(now).check_in_state, 'open');
+    assert.equal(byId(now).check_in_by, fromMinutes(minuteOfDay - 5 + 15));
+    assert.equal(byId(later).check_in_state, 'early');
+    assert.equal(byId(later).check_in_opens_at, fromMinutes(minuteOfDay + 120 - 10));
+    await a.post('/api/door/check-in').send({ code: await doorCode('LIB-S1') });
+    list = (await a.get('/api/bookings/mine')).body.bookings;
+    assert.equal(byId(now).check_in_state, 'checked-in');
+  }, { skip });
 });

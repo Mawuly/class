@@ -32,6 +32,24 @@ function cleanBuilding(input, partial = false) {
     out.name = s(input.name);
     if (out.name.length < 2 || out.name.length > 80) throw new AppError(400, 'Building name: 2–80 characters');
   }
+  // Map position for the location check at check-in: both or neither ('' clears it).
+  if (input.latitude !== undefined || input.longitude !== undefined) {
+    const blank = (v) => v === '' || v == null;
+    if (blank(input.latitude) && blank(input.longitude)) {
+      out.latitude = null; out.longitude = null;
+    } else {
+      out.latitude = Number(input.latitude);
+      out.longitude = Number(input.longitude);
+      if (!Number.isFinite(out.latitude) || out.latitude < -90 || out.latitude > 90
+        || !Number.isFinite(out.longitude) || out.longitude < -180 || out.longitude > 180) {
+        throw new AppError(400, 'Location: a latitude (-90 to 90) and a longitude (-180 to 180), e.g. 5.1036, -1.2829');
+      }
+    }
+  }
+  if (input.radiusM !== undefined && input.radiusM !== '') {
+    out.radius_m = Number(input.radiusM);
+    if (!Number.isInteger(out.radius_m) || out.radius_m < 30 || out.radius_m > 2000) throw new AppError(400, 'Check-in radius: 30 to 2000 metres');
+  }
   return out;
 }
 
@@ -95,7 +113,7 @@ function nowParts() {
 async function overview() {
   const { today, now } = nowParts();
   const buildings = await db.all(
-    `SELECT bl.id, bl.code, bl.name, count(r.id)::int AS room_count
+    `SELECT bl.id, bl.code, bl.name, bl.latitude, bl.longitude, bl.radius_m, count(r.id)::int AS room_count
      FROM buildings bl LEFT JOIN rooms r ON r.building_id = bl.id
      GROUP BY bl.id ORDER BY bl.code`,
   );
@@ -123,7 +141,9 @@ async function roomRow(id, exec = db) {
 
 async function createBuilding(admin, input, { ip } = {}) {
   const b = cleanBuilding(input);
-  const row = await db.get('INSERT INTO buildings (code, name) VALUES (?, ?) RETURNING id, code, name', [b.code, b.name])
+  const keys = Object.keys(b);
+  const row = await db.get(`INSERT INTO buildings (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')}) RETURNING id, code, name`,
+    keys.map((k) => b[k]))
     .catch((err) => friendly(err, 'building', b.code));
   await audit({ userId: admin.id, action: 'building.create', entity: 'building', entityId: row.id, details: b, ip });
   return row;

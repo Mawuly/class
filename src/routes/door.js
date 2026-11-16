@@ -20,7 +20,7 @@ const checkInLimiter = rateLimit({
 // Check in to your booking with the code on the door (typed, or from the QR code).
 router.post('/check-in', requireAuth, checkInLimiter, async (req, res) => {
   const via = req.body?.via === 'qr' ? 'qr' : 'code';
-  res.json(await checkin.checkIn(req.user, req.body?.code, { via, ip: req.ip }));
+  res.json(await checkin.checkIn(req.user, req.body?.code, { via, ip: req.ip, position: req.body?.position }));
 });
 
 // The page the QR code on a door opens. Works without signing in (times only).

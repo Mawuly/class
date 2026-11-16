@@ -2,7 +2,7 @@
 // Shows whether the room is free, checks you in to your booking, and books it from the next half hour.
 import { api } from './api.js';
 import { $, h, showError, toMin, fromMin } from './util.js';
-import { checkIn, formatCode, checkOutButton } from './checkin.js';
+import { checkIn, formatCode, checkOutButton, locationNote } from './checkin.js';
 
 const CATEGORIES = {
   lecture: 'Lecture', tutorial: 'Tutorial', lab: 'Lab', exam: 'Exam', meeting: 'Meeting', study: 'Study', event: 'Event',
@@ -66,11 +66,13 @@ function statusCard(d) {
 async function doCheckIn(button) {
   button.disabled = true;
   try {
-    const { booking } = await checkIn(code, 'qr');
-    flash = `You're checked in. ${booking.room_code} is yours until ${booking.end_time}.`;
+    button.textContent = 'Checking in…';
+    const { booking, location } = await checkIn(code, 'qr');
+    flash = `You're checked in. ${booking.room_code} is yours until ${booking.end_time}. ${locationNote(location)}`.trim();
     await load();
   } catch (err) {
     button.disabled = false;
+    button.textContent = 'Check in';
     showError(box, err.message);
   }
 }
@@ -81,7 +83,7 @@ function mineCard(d) {
     const next = encodeURIComponent(`/door?c=${code}`);
     return h('section', { class: 'door-card panel' },
       h('p', {}, 'Have a booking here? Sign in to check in. You can also book this room if it is free.'),
-      h('a', { class: 'button button--primary door__big', href: `/?next=${next}` }, 'Sign in'));
+      h('a', { class: 'button button--primary door__big', href: `/account.html?next=${next}` }, 'Sign in'));
   }
   if (!m) return '';
   const when = h('span', { class: 'mono' }, `${m.start}–${m.end}`);

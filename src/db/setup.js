@@ -17,8 +17,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   7: phone numbers and text-message codes   8: door codes, check-in, released bookings
 //   9: room_blocks (temporary closures) and the triggers that keep them apart from bookings
 //   10: booking window in app_meta   11: bookings.supervisor   12: bookings.checked_out_at
-//   13: users.google_sub (Continue with Google)
-const SCHEMA_VERSION = 13;
+//   13: users.google_sub (Continue with Google)   14: building locations, check-in location label
+const SCHEMA_VERSION = 14;
 
 let ready = null;
 

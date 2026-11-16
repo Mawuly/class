@@ -163,14 +163,33 @@ async function attendanceFor(range, bFilter, bArg) {
   const row = await db.get(
     `SELECT count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in,
             count(*) FILTER (WHERE b.status = 'released')::int AS released,
-            count(*) FILTER (WHERE b.status = 'approved' AND b.checked_in_at IS NULL)::int AS missed
+            count(*) FILTER (WHERE b.status = 'approved' AND b.checked_in_at IS NULL)::int AS missed,
+            count(*) FILTER (WHERE b.checkin_location = 'near')::int AS near,
+            count(*) FILTER (WHERE b.checkin_location = 'far')::int AS far,
+            count(*) FILTER (WHERE b.checkin_location = 'unknown')::int AS unknown,
+            count(*) FILTER (WHERE b.checkin_location = 'unchecked')::int AS unchecked
      FROM bookings b JOIN rooms r ON r.id = b.room_id
      WHERE b.status IN ('approved', 'released') AND b.date BETWEEN ? AND ?
        AND (b.checked_in_at IS NOT NULL OR b.date < ? OR (b.date = ? AND b.start_time <= ?)) ${bFilter}`,
     [from, range.to, today, today, graceAgo, ...bArg],
   );
   const total = row.checked_in + row.released + row.missed;
+  // Check-ins the location check flagged: away from the building, or no location shared.
+  const flagged = await db.all(
+    `SELECT b.id, b.date, b.start_time, b.end_time, b.checked_in_at, b.checkin_location AS location,
+            b.checkin_distance_m AS distance_m, r.code AS room_code, u.name AS user_name, u.email AS user_email
+     FROM bookings b JOIN rooms r ON r.id = b.room_id JOIN users u ON u.id = b.user_id
+     WHERE b.checkin_location IN ('far', 'unknown') AND b.date BETWEEN ? AND ? ${bFilter}
+     ORDER BY b.checked_in_at DESC LIMIT 50`,
+    [from, range.to, ...bArg],
+  );
+  const { unset } = await db.get(
+    `SELECT count(DISTINCT bl.id)::int AS unset FROM buildings bl JOIN rooms r ON r.building_id = bl.id
+     WHERE r.is_active AND (bl.latitude IS NULL OR bl.longitude IS NULL) ${bFilter}`,
+    bArg,
+  );
   return {
+    location: { near: row.near, far: row.far, unknown: row.unknown, unchecked: row.unchecked, buildingsWithoutLocation: unset, flagged },
     since,
     graceMinutes: rules.checkInGraceMinutes,
     releasing: rules.releaseNoShows,

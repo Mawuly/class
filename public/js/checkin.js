@@ -2,6 +2,8 @@
 import { api } from './api.js';
 import { h, toMin, fromMin, isoDate, hhmm, showError } from './util.js';
 import { openEditSheet, closeEditSheet } from './edit-sheet.js';
+import { currentPosition, locationNote } from './location.js';
+export { locationNote };
 
 /** Mirrors the server's checkInState: early, open, checked-in, released, not-approved or ended. */
 export function checkInState(b, rules, now = new Date()) {
@@ -25,7 +27,11 @@ export function formatCode(value) {
   return raw.length > 3 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw;
 }
 
-export const checkIn = (code, via = 'code') => api('/door/check-in', { method: 'POST', body: { code, via } });
+/** Checks in, with the phone's position if it shares one (it only labels the check-in). */
+export async function checkIn(code, via = 'code') {
+  const position = await currentPosition();
+  return api('/door/check-in', { method: 'POST', body: { code, via, position } });
+}
 
 /** A sheet asking for the code on the door, for when the QR code can't be scanned. */
 export function openCheckInSheet(b, { onDone } = {}) {
@@ -49,14 +55,18 @@ export function openCheckInSheet(b, { onDone } = {}) {
     showError(form, '');
     if (input.value.replace('-', '').length !== 6) { showError(form, 'Type the six letters and numbers from the sign.'); return; }
     submit.disabled = true;
+    submit.textContent = 'Checking in…';
     try {
-      await checkIn(input.value);
+      const res = await checkIn(input.value);
       closeEditSheet();
+      const note = locationNote(res.location);
+      if (note) alert(`Checked in. ${note}`);
       onDone?.();
     } catch (err) {
       showError(form, err.message);
     } finally {
       submit.disabled = false;
+      submit.textContent = 'Check in';
     }
   });
   openEditSheet('Check in', form);

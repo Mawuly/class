@@ -31,7 +31,11 @@ for (const form of forms) form.addEventListener('submit', async e => {
         message.textContent = 'If your account is eligible, a reset code will be sent to your registered email or verified phone.';
       } else { message.textContent = 'Contact the timetable office with your student or staff ID to reset your password.'; }
     } else if (body.user?.mustChangePassword) { location.hash = 'change'; }
-    else { location.assign('/'); }
+    else {
+      // Back to the door sign the person scanned, if that's where they came from.
+      const next = new URLSearchParams(location.search).get('next');
+      location.assign(next && /^\/door\?c=[A-Za-z0-9-]{6,7}$/.test(next) ? next : '/');
+    }
   } catch (err) { error.textContent = err.name === 'TimeoutError' || err instanceof TypeError ? 'Cannot reach the account service. You can still browse classrooms.' : err.message; }
   finally { submit.disabled = false; }
 });
