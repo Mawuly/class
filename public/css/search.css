@@ -1,0 +1,8 @@
+/* The room search bar with its time fields (Date, From, For, Building, Show rooms).
+   Columns never grow to fit a long option, so the bar keeps its shape. */
+#filters { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.3fr) auto; }
+@media (max-width: 1150px) {
+  #filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #filters .primary { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) { #filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -53,7 +53,62 @@ const state = {
   building: '',
   availableOnly: false,
   limit: 15,
+  start: '',   // chosen start time, HH:MM
+  hours: 1,    // chosen length in whole hours
 };
+
+/* ---------- Choosing a time ---------------------------------------------------------- */
+
+const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const fromMin = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+
+/** Start times every half hour (from the next half hour, today) and lengths of 1 to maxHours. */
+function fillTimeOptions() {
+  const { open, close, maxHours } = state.rules;
+  let first = toMin(open);
+  if (state.date === today) {
+    const now = new Date();
+    first = Math.max(first, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30);
+  }
+  const starts = [];
+  for (let m = first; m + 60 <= toMin(close); m += 30) starts.push(fromMin(m));
+  const startSel = $('start-time');
+  startSel.replaceChildren(...(starts.length ? starts : ['']).map((t) => optionEl(t, t ? clock(t) : 'No times left today')));
+  // Keep the chosen time if it is still possible; otherwise the first one (or 10:00 on another day).
+  const preferred = state.date === today ? starts[0] : (starts.includes('10:00') ? '10:00' : starts[0]);
+  state.start = starts.includes(state.start) ? state.start : (preferred || '');
+  startSel.value = state.start;
+  startSel.disabled = !starts.length;
+  const roomLeft = state.start ? Math.floor((toMin(close) - toMin(state.start)) / 60) : 1;
+  const max = Math.max(1, Math.min(maxHours, roomLeft));
+  state.hours = Math.min(state.hours, max);
+  $('duration').replaceChildren(...Array.from({ length: max }, (_, i) => optionEl(String(i + 1), `${i + 1} hour${i ? 's' : ''}`)));
+  $('duration').value = String(state.hours);
+}
+
+/**
+ * For each room: is it free for the chosen time (r.free is then exactly that slot), and if not,
+ * the next free slot of the same length that day (r.next). Uses the free periods from the server.
+ */
+function applyTime() {
+  const len = state.hours * 60;
+  const s = state.start ? toMin(state.start) : null;
+  for (const r of state.rooms) {
+    const periods = r.freePeriods || [];
+    const fits = s != null && periods.some((p) => toMin(p.start) <= s && s + len <= toMin(p.end));
+    r.free = fits ? { start: state.start, end: fromMin(s + len) } : null;
+    r.next = null;
+    if (!fits) {
+      const slots = periods.map((p) => {
+        const from = Math.max(toMin(p.start), s ?? 0);
+        const start = Math.ceil(from / 30) * 30;
+        return start + len <= toMin(p.end) ? { start: fromMin(start), end: fromMin(start + len) } : null;
+      }).filter(Boolean);
+      // The next one after the chosen time; failing that, the earliest one that day.
+      r.next = slots[0] || periods.map((p) => (toMin(p.end) - toMin(p.start) >= len ? { start: p.start, end: fromMin(toMin(p.start) + len) } : null)).find(Boolean) || null;
+    }
+  }
+}
 let pendingAction = null;
 let selectedRoom = null;
 let selectedSlot = null;
@@ -231,6 +286,8 @@ async function loadRooms() {
     const data = await api(`/public/rooms?date=${encodeURIComponent(date)}`);
     state.rooms = data.rooms;
     state.rules = { open: data.open, close: data.close, maxHours: data.maxHours };
+    fillTimeOptions();
+    applyTime();
   } catch (err) {
     state.rooms = [];
     $('search-error').textContent = err.status >= 500
@@ -293,15 +350,25 @@ function renderBuildings() {
 function roomCard(r) {
   const card = el('article', 'room-card');
   const top = el('div', 'room-top');
-  top.append(el('h3', '', r.code), el('span', `status ${r.free ? 'available' : 'unavailable'}`, r.free ? 'Available' : 'Fully booked'));
+  const periods = r.freePeriods || [];
+  const status = r.free ? 'Available' : periods.length ? `Busy at ${clock(state.start)}` : 'Fully booked';
+  top.append(el('h3', '', r.code), el('span', `status ${r.free ? 'available' : 'unavailable'}`, status));
   card.append(top, el('p', '', r.name));
   card.append(el('p', 'room-detail', `${TYPE[r.type] || 'Classroom'} · ${r.capacity} seats`));
+  // When it is free: the chosen time, or the free periods that day.
   card.append(el('p', 'room-when', r.free
     ? `${clock(r.free.start)} – ${clock(r.free.end)} · ${dayLabel(state.date)}`
-    : `No availability · ${dayLabel(state.date)}`));
+    : periods.length
+      ? `Free ${periods.slice(0, 3).map((p) => `${clock(p.start)} – ${clock(p.end)}`).join(', ')}${periods.length > 3 ? ', …' : ''} · ${dayLabel(state.date)}`
+      : `No availability · ${dayLabel(state.date)}`));
   const staffOnly = state.user?.role === 'student' && r.bookable_by !== 'all';
-  const book = button(r.free ? (staffOnly ? 'Staff only' : 'Request this room') : 'Fully booked', '', () => requestRoom(r, r.free));
-  book.disabled = !r.free || staffOnly;
+  const slot = r.free || r.next;
+  const label = staffOnly ? 'Staff only'
+    : r.free ? 'Request this room'
+      : r.next ? `Request ${clock(r.next.start)} – ${clock(r.next.end)}`
+        : periods.length ? `No ${state.hours} h slot free` : 'Fully booked';
+  const book = button(label, '', () => requestRoom(r, slot));
+  book.disabled = !slot || staffOnly;
   card.append(book);
   return card;
 }
@@ -539,6 +606,9 @@ $('filters').addEventListener('submit', (e) => {
   loadRooms();
 });
 $('date').addEventListener('change', () => { state.limit = 15; loadRooms(); });
+// Changing the time or length needs no new request: the free periods for the day are already here.
+$('start-time').addEventListener('change', () => { state.start = $('start-time').value; state.limit = 15; fillTimeOptions(); applyTime(); renderRooms(); });
+$('duration').addEventListener('change', () => { state.hours = Number($('duration').value); state.limit = 15; applyTime(); renderRooms(); });
 $('building').addEventListener('change', () => {
   state.building = $('building').value;
   state.limit = 15;

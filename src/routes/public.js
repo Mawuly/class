@@ -12,7 +12,8 @@ router.get('/now', async (req, res) => {
 
 // Every active room with its free periods on ?date= (default today). No booking details.
 router.get('/rooms', async (req, res) => {
-  res.set('Cache-Control', 'public, max-age=30, s-maxage=30');
+  // Always fresh: the page reloads it right after a booking, and must show that slot as taken.
+  res.set('Cache-Control', 'no-store');
   res.json(await rooms.publicRooms(req.query));
 });
 

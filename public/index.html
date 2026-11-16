@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#092b54">
   <link rel="stylesheet" href="/css/spaces.css">
   <link rel="stylesheet" href="/css/google.css">
+  <link rel="stylesheet" href="/css/search.css">
   <script type="module" src="/js/spaces.js"></script>
   <script type="module" src="/js/google-button.js"></script>
 </head>
@@ -27,11 +28,11 @@
           <img class="hero-bg" src="/media/ucc-large-theatre.jpg" alt="The Large Lecture Theatre at the University of Cape Coast" width="1600" height="1067" fetchpriority="high">
           <div class="hero-copy"><span class="eyebrow">UNIVERSITY OF CAPE COAST</span><h1>A room for<br>your next class.</h1><a class="hero-link" href="#room-search">Find a classroom</a></div>
         </div>
-        <section class="stats" aria-label="Campus overview"><div><span>Classrooms</span><strong><b id="rooms-stat">—</b> <small>across campus</small></strong></div><div><span>Lecture theatres</span><strong><b id="buildings-stat">—</b> <small>one connected campus</small></strong></div><div><span>Available on the selected day</span><strong id="free-stat">—</strong></div></section>
+        <section class="stats" aria-label="Campus overview"><div><span>Classrooms</span><strong><b id="rooms-stat">—</b> <small>across campus</small></strong></div><div><span>Lecture theatres</span><strong><b id="buildings-stat">—</b> <small>one connected campus</small></strong></div><div><span>Available at the selected time</span><strong id="free-stat">—</strong></div></section>
         <div class="section-heading"><div><h2>Lecture theatres</h2></div><button class="text-button" id="all-buildings">All buildings</button></div>
         <div id="buildings" class="building-grid"></div>
         <section id="room-search" class="room-section"><div class="section-heading"><div><h2>Classrooms</h2></div><span class="timezone">Africa / Accra</span></div>
-          <form id="filters" class="filters"><label>Date<input id="date" type="date" required></label><label>Building<select id="building"><option value="">All theatres</option><option value="SW">Sandwich · SW</option><option value="NLT">New Lecture Theatre · NLT</option><option value="CALC">C. A. Ackah · CALC</option></select></label><button class="primary" type="submit">Show rooms</button></form>
+          <form id="filters" class="filters"><label>Date<input id="date" type="date" required></label><label>From<select id="start-time" aria-label="Start time"></select></label><label>For<select id="duration" aria-label="How long"></select></label><label>Building<select id="building"><option value="">All theatres</option><option value="SW">Sandwich · SW</option><option value="NLT">New Lecture Theatre · NLT</option><option value="CALC">C. A. Ackah · CALC</option></select></label><button class="primary" type="submit">Show rooms</button></form>
           <p id="search-error" class="error" role="alert"></p>
           <div class="results-heading"><span id="result-count"></span><label class="check-label"><input type="checkbox" id="available-only"> Available only</label></div><div id="rooms" class="room-grid"></div><button id="more-rooms" class="text-button more-rooms" hidden>Show more rooms</button>
         </section>
