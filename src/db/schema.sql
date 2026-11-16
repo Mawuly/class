@@ -376,6 +376,11 @@ ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_location   text CHECK (ch
 ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_distance_m integer;
 ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_accuracy_m integer;
 
+-- Campus-wide check-in area (schema version 15): a radius up to 5 km, so one point can cover a
+-- whole campus until each building has its own location.
+ALTER TABLE buildings DROP CONSTRAINT IF EXISTS buildings_radius_m_check;
+ALTER TABLE buildings ADD CONSTRAINT buildings_radius_m_check CHECK (radius_m BETWEEN 30 AND 5000);
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

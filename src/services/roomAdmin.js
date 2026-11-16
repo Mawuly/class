@@ -48,7 +48,7 @@ function cleanBuilding(input, partial = false) {
   }
   if (input.radiusM !== undefined && input.radiusM !== '') {
     out.radius_m = Number(input.radiusM);
-    if (!Number.isInteger(out.radius_m) || out.radius_m < 30 || out.radius_m > 2000) throw new AppError(400, 'Check-in radius: 30 to 2000 metres');
+    if (!Number.isInteger(out.radius_m) || out.radius_m < 30 || out.radius_m > 5000) throw new AppError(400, 'Check-in radius: 30 to 5000 metres');
   }
   return out;
 }

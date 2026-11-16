@@ -73,6 +73,26 @@ const DEMO_ROOMS = [
   ['LIB', 'LIB-G1', 'Group Study Pod', 'study', 10, 0, ['whiteboard', 'ac']],
 ].map((r) => [...r, staffOnly(r[3])]);
 
+// The whole UCC campus, for the location check at check-in until each building has its own point:
+// the university's coordinates (5°06′57″N, 1°17′27″W) with a radius that covers the campus.
+const UCC_AREA = { latitude: 5.115833, longitude: -1.290833, radiusM: 3000 };
+
+/**
+ * Gives every building without a location the campus-wide area, once. Buildings the timetable
+ * office has located (or cleared) afterwards are never touched again. Returns how many were set.
+ */
+async function applyCampusArea(db, name) {
+  if (name !== 'ucc') return 0;
+  const done = await db.get("SELECT 1 FROM app_meta WHERE key = 'campus_area'");
+  if (done) return 0;
+  const { rows } = await db.run(
+    'UPDATE buildings SET latitude = ?, longitude = ?, radius_m = ? WHERE latitude IS NULL OR longitude IS NULL RETURNING id',
+    [UCC_AREA.latitude, UCC_AREA.longitude, UCC_AREA.radiusM],
+  );
+  await db.run("INSERT INTO app_meta (key, value) VALUES ('campus_area', 'ucc-1') ON CONFLICT (key) DO NOTHING");
+  return rows.length;
+}
+
 const CAMPUSES = {
   ucc: { buildings: UCC_BUILDINGS, rooms: UCC_ROOMS },
   demo: { buildings: DEMO_BUILDINGS, rooms: DEMO_ROOMS },
@@ -133,4 +153,4 @@ async function switchToCampus(db, name) {
   return out;
 }
 
-module.exports = { CAMPUSES, loadCampus, switchToCampus };
+module.exports = { CAMPUSES, loadCampus, switchToCampus, applyCampusArea, UCC_AREA };

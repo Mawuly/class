@@ -262,7 +262,7 @@ describe('location check at check-in (flags, never blocks)', () => {
     const admin = await signedIn('boss@campus.test');
     const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
     assert.match((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '95', longitude: '1' })).body.error, /latitude/);
-    assert.match((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ radiusM: 5 })).body.error, /30 to 2000/);
+    assert.match((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ radiusM: 5 })).body.error, /30 to 5000/);
     assert.equal((await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '', longitude: '' })).status, 200);
   });
 });
@@ -284,4 +284,29 @@ describe('"My bookings" shows check-in state', () => {
     list = (await a.get('/api/bookings/mine')).body.bookings;
     assert.equal(byId(now).check_in_state, 'checked-in');
   }, { skip });
+});
+
+describe('campus-wide check-in area', () => {
+  beforeEach(resetDb);
+
+  test('UCC buildings get the campus area once; located or cleared buildings are left alone', async () => {
+    const { applyCampusArea, UCC_AREA } = require('../src/db/campus');
+    await db.run("DELETE FROM app_meta WHERE key = 'campus_area'");
+    await db.run("UPDATE buildings SET latitude = 5.2, longitude = -1.3, radius_m = 120 WHERE code = 'LIB'");
+    assert.equal(await applyCampusArea(db, 'demo'), 0, 'only for the UCC campus');
+    const set = await applyCampusArea(db, 'ucc');
+    assert.equal(set, (await db.get('SELECT count(*)::int AS n FROM buildings')).n - 1);
+    const scb = await db.get("SELECT latitude, longitude, radius_m FROM buildings WHERE code = 'SCB'");
+    assert.deepEqual(scb, { latitude: UCC_AREA.latitude, longitude: UCC_AREA.longitude, radius_m: 3000 });
+    assert.equal((await db.get("SELECT radius_m FROM buildings WHERE code = 'LIB'")).radius_m, 120);
+    // Once only: a building the office clears later stays cleared.
+    await db.run("UPDATE buildings SET latitude = NULL, longitude = NULL WHERE code = 'SCB'");
+    assert.equal(await applyCampusArea(db, 'ucc'), 0);
+    assert.equal((await db.get("SELECT latitude FROM buildings WHERE code = 'SCB'")).latitude, null);
+    // From the campus centre: ~1.5 km is inside, Cape Coast town (~5 km away) is flagged.
+    const geo = require('../src/utils/geo');
+    const area = { latitude: UCC_AREA.latitude, longitude: UCC_AREA.longitude, radius_m: 3000 };
+    assert.equal(geo.label(area, { lat: 5.1295, lng: -1.2908, accuracy: 20 }).state, 'near');
+    assert.equal(geo.label(area, { lat: 5.1053, lng: -1.2466, accuracy: 20 }).state, 'far');
+  });
 });

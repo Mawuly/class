@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('./index');
 const { seedReference, seedDemo } = require('./seed');
-const { switchToCampus } = require('./campus');
+const { switchToCampus, applyCampusArea } = require('./campus');
 
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
@@ -18,7 +18,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   9: room_blocks (temporary closures) and the triggers that keep them apart from bookings
 //   10: booking window in app_meta   11: bookings.supervisor   12: bookings.checked_out_at
 //   13: users.google_sub (Continue with Google)   14: building locations, check-in location label
-const SCHEMA_VERSION = 14;
+//   15: check-in radius up to 5 km (campus-wide area)
+const SCHEMA_VERSION = 15;
 
 let ready = null;
 
@@ -61,6 +62,9 @@ function ensureReady() {
       );
       console.log(`[setup] switched to campus "${config.campus}"`, changed);
     }
+    // Every building starts with the campus-wide check-in area (once), until it gets its own point.
+    const located = await applyCampusArea(x, config.campus);
+    if (located) console.log(`[setup] gave ${located} buildings the campus-wide check-in area`);
     // Demo rooms kept for bookings that were still coming up: hide them once those are over.
     await x.run(
       `UPDATE rooms r SET is_active = false WHERE r.is_active AND r.code LIKE 'DEMO-%' AND NOT EXISTS (

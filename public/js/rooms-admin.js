@@ -69,7 +69,8 @@ function render() {
           h('span', { class: 'mono rt-group__code' }, b.code),
           h('span', { class: 'rt-group__name' }, b.name),
           h('span', { class: 'mono rt-group__count' }, `${b.room_count} room${b.room_count === 1 ? '' : 's'}`
-            + `${b.room_count && b.latitude == null ? ' · no location for check-in' : ''}`),
+            + `${b.room_count && b.latitude == null ? ' · no location for check-in' : ''}`
+            + `${b.room_count && b.latitude != null && b.radius_m >= 2000 ? ' · campus-wide check-in area' : ''}`),
           h('button', { class: 'link-button', type: 'button', 'aria-label': `Edit building ${b.code}`, onclick: () => openBuilding(b) }, 'Edit building'),
           h('button', { class: 'link-button', type: 'button', onclick: () => openRoom(null, b.id) }, '+ Room here')),
         list.length
@@ -329,7 +330,7 @@ function openBuilding(b) {
     class: 'mono', inputmode: 'decimal', autocomplete: 'off', placeholder: 'e.g. 5.1036, -1.2829',
     value: b?.latitude != null ? `${b.latitude}, ${b.longitude}` : '',
   });
-  const radius = h('input', { class: 'mono', type: 'number', min: '30', max: '2000', step: '10', value: String(b?.radius_m ?? 150) });
+  const radius = h('input', { class: 'mono', type: 'number', min: '30', max: '5000', step: '10', value: String(b?.radius_m ?? 150) });
   const here = h('button', { class: 'button button--secondary', type: 'button' }, 'Use my current location');
   const hereNote = h('p', { class: 'field__hint', role: 'status' });
   here.addEventListener('click', () => {

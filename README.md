@@ -254,3 +254,8 @@ Set each building's location once in `/admin` → Rooms → **Edit building**: s
 press **Use my current location**, or paste the coordinates from Google Maps (right-click the
 building). The radius (default 150 m) is how far away still counts as "at the building"; the phone's
 own uncertainty (up to 100 m) is allowed on top.
+
+To start with, every UCC building has a **campus-wide area**: the university's coordinates
+(5°06′57″N, 1°17′27″W) with a 3 km radius. That flags check-ins from town, home or another city, but
+not from a hostel on campus. Replace it building by building (the Rooms page marks which still use
+it); buildings you set yourself are never overwritten.
