@@ -32,8 +32,9 @@ const ACCURACY_ALLOWANCE_M = 100;
  */
 function label(building, position) {
   const pos = cleanPosition(position);
+  // A building with no location can't be checked, whatever the phone says.
+  if (building.latitude == null || building.longitude == null) return { state: 'unchecked', distance: null, accuracy: pos?.accuracy ?? null };
   if (!pos || (pos.accuracy && pos.accuracy > MAX_ACCURACY_M)) return { state: 'unknown', distance: null, accuracy: pos?.accuracy ?? null };
-  if (building.latitude == null || building.longitude == null) return { state: 'unchecked', distance: null, accuracy: pos.accuracy };
   const distance = distanceM(pos, { lat: building.latitude, lng: building.longitude });
   const allowed = building.radius_m + Math.min(pos.accuracy ?? 0, ACCURACY_ALLOWANCE_M);
   return { state: distance <= allowed ? 'near' : 'far', distance, accuracy: pos.accuracy };

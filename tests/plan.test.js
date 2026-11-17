@@ -116,7 +116,7 @@ describe('booking window and whole hours', () => {
   });
 
   test('defaults: 06:30–20:30, starts every half hour, whole hours up to 4', async () => {
-    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4 });
+    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4, checkInLocation: 'required' });
     const meta = (await lecturer.get('/api/rooms/meta')).body.rules;
     assert.deepEqual([meta.open, meta.close, meta.maxHours], ['06:30', '20:30', 4]);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '10:30')).body.error, /whole hours/);
@@ -126,7 +126,7 @@ describe('booking window and whole hours', () => {
 
   test('the office changes the window; it applies at once and is logged', async () => {
     const res = await admin.patch('/api/admin/settings').send({ open: '08:00', close: '18:00', maxHours: 2 });
-    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2 });
+    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2, checkInLocation: 'required' });
     assert.match((await book(lecturer, 'LT-1', date, '07:00', '08:00')).body.error, /between 08:00 and 18:00/);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '12:00')).body.error, /at most 2 hours/);
     assert.equal((await book(lecturer, 'LT-1', date, '16:00', '18:00')).status, 201);

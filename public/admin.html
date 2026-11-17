@@ -157,6 +157,14 @@
       <p class="settings-form__summary" data-settings-summary></p>
       <p class="field__hint">Applies to new bookings, the free-room search, the day board and door pages straight away.
         Bookings already made outside the new times are kept. Temporary closures are on the Rooms page.</p>
+      <h2 class="panel__title">Check-in location</h2>
+      <label class="field"><span class="field__label">When a phone isn't at the room's building</span>
+        <select name="checkInLocation">
+          <option value="required">Refuse the check-in (required)</option>
+          <option value="flag">Allow it, but flag it on Statistics (flag only)</option>
+        </select></label>
+      <p class="field__hint">Applies to QR-code and typed-code check-ins. With "required", people must allow location on their
+        phone and be at the building. Buildings without a location are never refused.</p>
       <p class="auth__done" role="status" data-settings-done hidden></p>
       <div class="sheet__actions"><button class="button button--primary" type="submit">Save</button></div>
     </form>

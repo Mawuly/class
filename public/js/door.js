@@ -93,6 +93,7 @@ function mineCard(d) {
     const button = h('button', { class: 'button button--primary door__big', type: 'button' }, 'Check in');
     button.addEventListener('click', () => doCheckIn(button));
     return h('section', { class: 'door-card door-card--action panel' }, head, title, button,
+      d.checkIn.locationRequired ? h('p', { class: 'muted' }, `Your phone will ask to share your location: check-in only works at ${d.room.buildingName}.`) : '',
       d.checkIn.release ? h('p', { class: 'muted' }, `Check in by ${m.deadline}, or the room is released for others.`) : '');
   }
   if (m.state === 'checked-in') {

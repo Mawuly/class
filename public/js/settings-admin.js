@@ -19,6 +19,7 @@ function fill(s) {
   form.open.value = s.open;
   form.close.value = s.close;
   form.maxHours.value = String(s.maxHours);
+  form.checkInLocation.value = s.checkInLocation || 'required';
   describe();
 }
 
@@ -49,7 +50,7 @@ form.addEventListener('submit', async (e) => {
   button.disabled = true;
   try {
     const { settings } = await api('/admin/settings', {
-      method: 'PATCH', body: { open: form.open.value, close: form.close.value, maxHours: Number(form.maxHours.value) },
+      method: 'PATCH', body: { open: form.open.value, close: form.close.value, maxHours: Number(form.maxHours.value), checkInLocation: form.checkInLocation.value },
     });
     fill(settings);
     done.textContent = 'Saved. New bookings follow these times now; bookings already made are not changed.';

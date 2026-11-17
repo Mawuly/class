@@ -84,6 +84,25 @@ function checkInState(b, now = new Date()) {
   return { ...base, state: 'open' };
 }
 
+const metres = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`);
+
+/** Why a check-in was refused by the location check, in words the person can act on. */
+function refusal(where, room, pos) {
+  const place = room.building_name;
+  if (!pos) {
+    return `Turn on location to check in: we need to see that you're at ${place}. `
+      + 'Allow location for this site in your browser, then try again.';
+  }
+  // Near the building but the phone isn't sure enough (often indoors): ask for a better fix.
+  const unsure = pos.accuracy && (pos.accuracy > geo.MAX_ACCURACY_M
+    || (where.distance != null && where.distance <= room.radius_m + pos.accuracy));
+  if (where.state === 'unknown' || unsure) {
+    return `Your phone's location isn't precise enough${pos.accuracy ? ` (about ±${metres(pos.accuracy)})` : ''}. `
+      + 'Step near a window or outside the door, turn on precise location, and try again.';
+  }
+  return `You seem to be ${metres(where.distance)} from ${place}. You can check in once you're at the room.`;
+}
+
 async function roomByCode(raw) {
   const code = normaliseCode(raw);
   const room = code && await db.get(
@@ -130,8 +149,17 @@ async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}
   }
   if (s.state === 'checked-in') return { booking: { ...b, room_code: room.code }, alreadyCheckedIn: true };
 
-  // Where the phone was, compared with the building. Only labels the check-in; never blocks it.
+  // Where the phone was, compared with the building. With the location check "required" (the
+  // default, /admin → Settings), a phone that isn't at the building can't check in; with "flag"
+  // the check-in is only labelled. Buildings without a location can't be checked, so they pass.
   const where = geo.label(room, position);
+  if (rules.checkInLocation === 'required' && (where.state === 'far' || where.state === 'unknown')) {
+    const message = refusal(where, room, geo.cleanPosition(position));
+    await audit({ userId: user.id, action: 'booking.check_in_refused', entity: 'booking', entityId: b.id,
+      details: { via, location: where.state, ...(where.distance != null ? { distance_m: where.distance } : {}),
+        ...(where.accuracy != null ? { accuracy_m: where.accuracy } : {}) }, ip });
+    throw new AppError(403, message, { location: { state: where.state, distance: where.distance } });
+  }
 
   const updated = await db.tx(async (x) => {
     const row = await x.get(
@@ -230,7 +258,8 @@ async function door(rawCode, user) {
     mine,
     book,
     signedIn: Boolean(user),
-    checkIn: { earlyMinutes: rules.checkInEarlyMinutes, graceMinutes: rules.checkInGraceMinutes, release: rules.releaseNoShows },
+    checkIn: { earlyMinutes: rules.checkInEarlyMinutes, graceMinutes: rules.checkInGraceMinutes, release: rules.releaseNoShows,
+      locationRequired: rules.checkInLocation === 'required' && room.latitude != null },
   };
 }
 

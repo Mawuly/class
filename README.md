@@ -244,9 +244,13 @@ With `ALLOWED_EMAIL_DOMAIN` set, only Google accounts at that domain can sign in
 
 ## Location check at check-in
 
-When someone checks in (door QR code or typed code), the phone is asked for its location. The check-in
-always goes through; it is only **labelled** for the timetable office: at the building, away from it
-(with the distance), location not shared, or building location not set. Only the label and the distance
+When someone checks in (door QR code or typed code), the phone is asked for its location. By default
+the location is **required**: check-in is refused if the phone is away from the room's building, if
+location is turned off, or if the phone's fix is too imprecise to tell, with a message saying which and
+what to do. Buildings without a location are never refused. Every check-in is labelled for the
+timetable office (at the building, away from it with the distance, location not shared, or building
+location not set), and refused attempts are in the audit log. In `/admin` → **Settings** the office can
+switch to **flag only**: check-in always works and far-away check-ins are only flagged. Only the label and the distance
 are stored, never anyone's coordinates. Flagged check-ins are listed on **Statistics → Check-in
 location** and in the audit log.
 

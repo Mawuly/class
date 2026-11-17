@@ -68,6 +68,9 @@ function describe(e) {
         unchecked: 'building location not set',
       }[d.location]].filter(Boolean).join(' · ')],
     'booking.check_out': [`checked out of ${owner || 'their '}booking for ${booking}`, d.end ? `room free from ${d.end}` : 'the rest of the room is free'],
+    'booking.check_in_refused': [`was refused check-in to ${owner || 'their '}booking for ${booking}`,
+      d.location === 'far' ? `⚠ ${d.distance_m >= 1000 ? `${(d.distance_m / 1000).toFixed(1)} km` : `${d.distance_m} m`} from the building`
+        : d.accuracy_m ? `location too imprecise (±${d.accuracy_m} m)` : 'location not shared'],
     'room.new_door_code': [`replaced the door code of ${e.target_room || 'a room'}`, 'the old sign stopped working'],
     'booking.approve': [`approved ${owner}request for ${booking}`],
     'booking.reject': [`rejected ${owner}request for ${booking}`, d.reason ? `“${d.reason}”` : ''],
@@ -81,7 +84,7 @@ function describe(e) {
     'room.delete': [`deleted room ${d.code || ''}`.trim()],
     'room.block': [`closed ${e.target_room || 'a room'} on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `“${d.reason}”` : ''],
     'room.unblock': [`made ${e.target_room || 'a room'} available again on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `was closed for “${d.reason}”` : ''],
-    'settings.update': ['changed the booking window', Object.entries(d).map(([k, v]) => `${{ open: 'opens', close: 'closes', maxHours: 'longest booking' }[k] || k} ${v.from} → ${v.to}${k === 'maxHours' ? ' h' : ''}`).join(', ')],
+    'settings.update': ['changed the booking window', Object.entries(d).map(([k, v]) => `${{ open: 'opens', close: 'closes', maxHours: 'longest booking', checkInLocation: 'check-in location' }[k] || k} ${v.from} → ${v.to}${k === 'maxHours' ? ' h' : ''}`).join(', ')],
     'booking.check_out': [`checked out of ${owner || 'their '}booking for ${booking} early`, d.ended ? `left at ${d.ended}, booked until ${d.planned_end}` : ''],
     'building.create': [`added building ${e.target_building || d.code || ''}`.trim()],
     'building.update': [`edited building ${e.target_building || d.code || ''}`.trim()],

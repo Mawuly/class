@@ -227,8 +227,9 @@ describe('location check at check-in (flags, never blocks)', () => {
     assert.equal(geo.label({ latitude: null, longitude: null, radius_m: 150 }, { lat: 5.1, lng: -1.28 }).state, 'unchecked');
   });
 
-  test('the label and distance are saved, logged and shown in statistics; check-in always works', async () => {
+  test('flag only: the label and distance are saved, logged and shown in statistics; check-in always works', async () => {
     const admin = await signedIn('boss@campus.test');
+    assert.equal((await admin.patch('/api/admin/settings').send({ checkInLocation: 'flag' })).body.settings.checkInLocation, 'flag');
     const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
     const set = await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '5.1036', longitude: '-1.2829', radiusM: 100 });
     assert.equal(set.status, 200);
@@ -331,4 +332,55 @@ describe('UCC building locations', () => {
       assert.ok(distanceM({ lat: 5.115833, lng: -1.290833 }, { lat: p.latitude, lng: p.longitude }) < 1500, code);
     }
   });
+});
+
+
+describe('location required at check-in', () => {
+  beforeEach(resetDb);
+
+  test('away, no location or an unsure fix is refused with a reason; at the building works', async () => {
+    const admin = await signedIn('boss@campus.test');
+    const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
+    await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '5.1036', longitude: '-1.2829', radiusM: 100 });
+    const a = await signedIn('ama@campus.test');
+    await bookingAt(a.user, 'LIB-S1', -5);
+    const code = await doorCode('LIB-S1');
+    const tryAt = (position) => a.post('/api/door/check-in').send({ code, via: 'qr', position });
+
+    let res = await tryAt({ lat: 5.1236, lng: -1.2829, accuracy: 10 });
+    assert.equal(res.status, 403);
+    assert.match(res.body.error, /You seem to be 2\.2 km from Main Library/);
+    assert.equal(res.body.location.state, 'far');
+
+    res = await tryAt(undefined);
+    assert.match(res.body.error, /Turn on location to check in/);
+
+    res = await tryAt({ lat: 5.1063, lng: -1.2829, accuracy: 400 }); // 300 m away, but only sure to ±400 m
+    assert.match(res.body.error, /isn't precise enough \(about ±400 m\)/);
+
+    const refused = await db.all("SELECT details FROM audit_log WHERE action = 'booking.check_in_refused' ORDER BY id");
+    assert.deepEqual(refused.map((r) => r.details.location), ['far', 'unknown', 'far']);
+    assert.equal((await db.get('SELECT checked_in_at FROM bookings WHERE user_id = ?', [a.user.id])).checked_in_at, null);
+
+    res = await tryAt({ lat: 5.1040, lng: -1.2829, accuracy: 20 });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.location.state, 'near');
+  }, { skip });
+
+  test('a building with no location is never refused; the office can switch to flag only', async () => {
+    const admin = await signedIn('boss@campus.test');
+    const a = await signedIn('ama@campus.test');
+    const b = await signedIn('kofi@campus.test');
+    await bookingAt(a.user, 'SCB-104', -5);
+    assert.equal((await a.post('/api/door/check-in').send({ code: await doorCode('SCB-104') })).status, 200, 'no location set: passes');
+    const lib = await db.get("SELECT id FROM buildings WHERE code = 'LIB'");
+    await admin.patch(`/api/admin/buildings/${lib.id}`).send({ latitude: '5.1036', longitude: '-1.2829' });
+    await bookingAt(b.user, 'LIB-S2', -5);
+    assert.equal((await b.post('/api/door/check-in').send({ code: await doorCode('LIB-S2') })).status, 403);
+    await admin.patch('/api/admin/settings').send({ checkInLocation: 'flag' });
+    const res = await b.post('/api/door/check-in').send({ code: await doorCode('LIB-S2') });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.location.state, 'unknown');
+    assert.match((await admin.patch('/api/admin/settings').send({ checkInLocation: 'off' })).body.error, /required" or "flag/);
+  }, { skip });
 });

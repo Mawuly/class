@@ -123,5 +123,8 @@ module.exports = {
     // released and the room becomes free. CHECKIN_RELEASE=off keeps check-in but never releases.
     checkInGraceMinutes: Math.min(60, Math.max(5, Number(process.env.CHECKIN_GRACE_MINUTES) || 15)),
     releaseNoShows: !/^(0|off|false|no)$/i.test(process.env.CHECKIN_RELEASE || ''),
+    // "required": check-in is refused unless the phone is at the room's building.
+    // "flag": check-in always works and far-away check-ins are only flagged. Set in /admin → Settings.
+    checkInLocation: 'required',
   },
 };
