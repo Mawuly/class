@@ -11,7 +11,7 @@
   <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/admin-spaces.css">
-  <link rel="stylesheet" href="/css/google.css"><link rel="stylesheet" href="/css/brand.css">
+  <link rel="stylesheet" href="/css/google.css"><link rel="stylesheet" href="/css/brand.css"><link rel="stylesheet" href="/css/admin-sidebar.css">
   <script type="module" src="/js/admin-app.js"></script>
   <script type="module" src="/js/google-button.js"></script>
 </head>
@@ -23,16 +23,19 @@
     <span class="portal-tag">Timetable office</span>
     <span class="clock mono" data-clock></span>
     <nav class="topbar__nav" data-signed-in hidden aria-label="Timetable office">
-      <a class="topbar__link" href="#/approvals" data-nav="approvals">Approvals <span class="count mono" data-pending-badge hidden></span></a>
-      <a class="topbar__link" href="#/rooms" data-nav="rooms">Rooms</a>
-      <a class="topbar__link" href="#/people" data-nav="people">People</a>
-      <a class="topbar__link" href="#/stats" data-nav="stats">Statistics</a>
-      <a class="topbar__link" href="#/audit" data-nav="audit">Audit log</a>
-      <a class="topbar__link" href="#/timetable" data-nav="timetable">Timetable</a>
-      <a class="topbar__link" href="#/settings" data-nav="settings">Settings</a>
-      <a class="topbar__link topbar__link--portal" href="/">Main site</a>
-      <span class="topbar__who" data-user-name></span>
-      <button class="link-button" type="button" data-sign-out>Sign out</button>
+      <span class="side-label">Timetable office</span>
+      <a class="topbar__link" href="#/approvals" data-nav="approvals"><span class="side-icon" aria-hidden="true">✓</span>Approvals <span class="count mono" data-pending-badge hidden></span></a>
+      <a class="topbar__link" href="#/rooms" data-nav="rooms"><span class="side-icon" aria-hidden="true">▦</span>Rooms</a>
+      <a class="topbar__link" href="#/timetable" data-nav="timetable"><span class="side-icon" aria-hidden="true">▤</span>Timetable</a>
+      <a class="topbar__link" href="#/people" data-nav="people"><span class="side-icon" aria-hidden="true">◉</span>People</a>
+      <a class="topbar__link" href="#/stats" data-nav="stats"><span class="side-icon" aria-hidden="true">▥</span>Statistics</a>
+      <a class="topbar__link" href="#/audit" data-nav="audit"><span class="side-icon" aria-hidden="true">≡</span>Audit log</a>
+      <a class="topbar__link" href="#/settings" data-nav="settings"><span class="side-icon" aria-hidden="true">⚙</span>Settings</a>
+      <span class="side-foot">
+        <a class="topbar__link topbar__link--portal" href="/"><span class="side-icon" aria-hidden="true">↗</span>Main site</a>
+        <span class="topbar__who" data-user-name></span>
+        <button class="link-button" type="button" data-sign-out>Sign out</button>
+      </span>
     </nav>
   </header>
 

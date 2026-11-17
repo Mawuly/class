@@ -37,6 +37,7 @@ function showLanding(form = 'login') {
   state.user = null;
   clearInterval(state.badgeTimer);
   $('[data-signed-in]').hidden = true;
+  document.body.classList.remove('has-sidebar');
   show('portal-landing');
   for (const f of $$('[data-view="portal-landing"] form')) f.hidden = f.dataset.form !== `portal-${form}`;
   $(`[data-form="portal-${form}"] input`)?.focus();
@@ -176,6 +177,8 @@ async function route() {
 async function enter(user, opts = {}) {
   state.user = user;
   $('[data-signed-in]').hidden = user.role !== 'admin';
+  // Admins get the menu as a sidebar on the left (admin-sidebar.css).
+  document.body.classList.toggle('has-sidebar', user.role === 'admin');
   $('[data-user-name]').textContent = `${user.name} · ${user.role}`;
   if (user.role !== 'admin' || user.mustChangePassword) { await showNotAdmin(opts); return; }
   state.meta = await api('/rooms/meta');
