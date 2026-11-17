@@ -70,7 +70,34 @@ function validateSlot({ date, start, end }, now = new Date()) {
   return null;
 }
 
+/**
+ * The rules for an event room (an auditorium): from the usual opening time until eventClose the NEXT
+ * morning, whole hours, up to eventMaxHours. An end at or before the start means the next day
+ * ("18:00" to "05:00"). Returns { error } or { overnight, nextDayEnd } where nextDayEnd is the end
+ * on the following date (null when the booking ends by midnight).
+ */
+function validateEventSlot({ date, start, end }, now = new Date()) {
+  const { open, slotMinutes, maxDaysAhead, eventClose, eventMaxHours } = booking;
+  if (!isValidDate(date)) return { error: 'Date must be a valid date (YYYY-MM-DD)' };
+  if (!isValidTime(start) || !isValidTime(end)) return { error: 'Times must be in HH:MM format' };
+  const s = toMinutes(start);
+  let e = toMinutes(end);
+  if (s % slotMinutes || e % slotMinutes) return { error: `Times must be on ${slotMinutes}-minute boundaries` };
+  if (s < toMinutes(open)) return { error: `Event rooms can be booked from ${open}` };
+  const overnight = e <= s;
+  if (overnight) e += 24 * 60;
+  if (e - s < 60) return { error: 'A booking lasts at least an hour' };
+  if ((e - s) % 60) return { error: 'Bookings last whole hours (1 h, 2 h, …)' };
+  if (e > 24 * 60 + toMinutes(eventClose)) return { error: `Event rooms can be booked until ${eventClose} the next morning` };
+  if (e - s > eventMaxHours * 60) return { error: `An event booking can last at most ${eventMaxHours} hours` };
+  const today = localDate(now);
+  if (date < today || (date === today && start < localTime(now))) return { error: 'You cannot book a time in the past' };
+  if (daysBetween(today, date) > maxDaysAhead) return { error: `Bookings can be made at most ${maxDaysAhead} days ahead` };
+  return { overnight: e > 24 * 60, nextDayEnd: e > 24 * 60 ? fromMinutes(e - 24 * 60) : null };
+}
+
 module.exports = {
+  validateEventSlot,
   toMinutes, fromMinutes, overlaps, isValidTime, isValidDate,
   localDate, localTime, addDays, daysBetween, validateSlot,
 };

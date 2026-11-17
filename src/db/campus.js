@@ -135,6 +135,17 @@ async function applyBuildingLocations(db, name) {
   return n;
 }
 
+/** The UCC auditoriums are event rooms (bookable overnight), once; the office can change each room after. */
+async function applyEventRooms(db, name) {
+  if (name !== 'ucc') return 0;
+  if (await db.get("SELECT 1 FROM app_meta WHERE key = 'event_rooms'")) return 0;
+  const { changes } = await db.run(
+    "UPDATE rooms SET extended_hours = true WHERE code IN ('MAIN-AUD', 'LLT', 'SMS-AUD', 'CALC-AUD')",
+  );
+  await db.run("INSERT INTO app_meta (key, value) VALUES ('event_rooms', 'ucc-1') ON CONFLICT (key) DO NOTHING");
+  return changes;
+}
+
 const CAMPUSES = {
   ucc: { buildings: UCC_BUILDINGS, rooms: UCC_ROOMS },
   demo: { buildings: DEMO_BUILDINGS, rooms: DEMO_ROOMS },
@@ -195,4 +206,4 @@ async function switchToCampus(db, name) {
   return out;
 }
 
-module.exports = { CAMPUSES, loadCampus, switchToCampus, applyCampusArea, applyBuildingLocations, UCC_AREA, UCC_LOCATIONS };
+module.exports = { CAMPUSES, loadCampus, switchToCampus, applyCampusArea, applyBuildingLocations, applyEventRooms, UCC_AREA, UCC_LOCATIONS };

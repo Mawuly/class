@@ -21,6 +21,10 @@ function fill(s) {
   form.maxHours.value = String(s.maxHours);
   form.checkInLocation.value = s.checkInLocation || 'required';
   form.studentApproval.value = s.studentApproval || 'auto';
+  form.eventClose.replaceChildren(...times('00:00', '12:00').map((t) => h('option', { value: t }, `${t} next day`)));
+  form.eventClose.value = s.eventClose || '05:00';
+  form.eventMaxHours.replaceChildren(...Array.from({ length: 24 }, (_, i) => h('option', { value: String(i + 1) }, `${i + 1} hour${i ? 's' : ''}`)));
+  form.eventMaxHours.value = String(s.eventMaxHours || 12);
   describe();
 }
 
@@ -51,7 +55,8 @@ form.addEventListener('submit', async (e) => {
   button.disabled = true;
   try {
     const { settings } = await api('/admin/settings', {
-      method: 'PATCH', body: { open: form.open.value, close: form.close.value, maxHours: Number(form.maxHours.value), checkInLocation: form.checkInLocation.value, studentApproval: form.studentApproval.value },
+      method: 'PATCH', body: { open: form.open.value, close: form.close.value, maxHours: Number(form.maxHours.value), checkInLocation: form.checkInLocation.value, studentApproval: form.studentApproval.value,
+        eventClose: form.eventClose.value, eventMaxHours: Number(form.eventMaxHours.value) },
     });
     fill(settings);
     done.textContent = 'Saved. New bookings follow these times now; bookings already made are not changed.';

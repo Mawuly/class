@@ -12,6 +12,7 @@ const rules = config.booking;
 const KEYS = {
   open: 'booking_open', close: 'booking_close', maxHours: 'booking_max_hours',
   checkInLocation: 'checkin_location', studentApproval: 'student_approval',
+  eventClose: 'event_close', eventMaxHours: 'event_max_hours',
 };
 const LOCATION_MODES = ['required', 'flag'];
 const APPROVAL_MODES = ['auto', 'manual'];
@@ -22,11 +23,14 @@ function current() {
   return {
     open: rules.open, close: rules.close, maxHours: rules.maxHours,
     checkInLocation: rules.checkInLocation, studentApproval: rules.studentApproval,
+    eventClose: rules.eventClose, eventMaxHours: rules.eventMaxHours,
   };
 }
 
 /** Returns an error message, or null when the window is acceptable. */
-function problem({ open, close, maxHours, checkInLocation = 'required', studentApproval = 'auto' }) {
+function problem({ open, close, maxHours, checkInLocation = 'required', studentApproval = 'auto', eventClose = '05:00', eventMaxHours = 12 }) {
+  if (!t.isValidTime(eventClose) || t.toMinutes(eventClose) % 30 || eventClose > '12:00') return 'Event rooms must close on the hour or half hour, by 12:00 the next day';
+  if (!Number.isInteger(eventMaxHours) || eventMaxHours < 1 || eventMaxHours > 24) return 'The longest event booking must be 1 to 24 whole hours';
   if (!LOCATION_MODES.includes(checkInLocation)) return 'Check-in location must be "required" or "flag"';
   if (!APPROVAL_MODES.includes(studentApproval)) return 'Student requests must be "auto" or "manual"';
   if (!t.isValidTime(open) || !t.isValidTime(close)) return 'Opening and closing times must be in HH:MM format';
@@ -40,7 +44,7 @@ function problem({ open, close, maxHours, checkInLocation = 'required', studentA
 
 /** Reads the window from the database into config.booking. Bad stored values are ignored. */
 async function load(exec = db) {
-  const rows = await exec.all('SELECT key, value FROM app_meta WHERE key IN (?, ?, ?, ?, ?)', Object.values(KEYS));
+  const rows = await exec.all('SELECT key, value FROM app_meta WHERE key IN (?, ?, ?, ?, ?, ?, ?)', Object.values(KEYS));
   const v = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const next = {
     open: v[KEYS.open] ?? rules.open,
@@ -48,6 +52,8 @@ async function load(exec = db) {
     maxHours: v[KEYS.maxHours] == null ? rules.maxHours : Number(v[KEYS.maxHours]),
     checkInLocation: v[KEYS.checkInLocation] ?? rules.checkInLocation,
     studentApproval: v[KEYS.studentApproval] ?? rules.studentApproval,
+    eventClose: v[KEYS.eventClose] ?? rules.eventClose,
+    eventMaxHours: v[KEYS.eventMaxHours] == null ? rules.eventMaxHours : Number(v[KEYS.eventMaxHours]),
   };
   if (!problem(next)) Object.assign(rules, next);
   return current();
@@ -68,6 +74,8 @@ async function update(admin, input, { ip } = {}) {
     maxHours: input.maxHours === undefined ? before.maxHours : Number(input.maxHours),
     checkInLocation: input.checkInLocation === undefined ? before.checkInLocation : String(input.checkInLocation),
     studentApproval: input.studentApproval === undefined ? before.studentApproval : String(input.studentApproval),
+    eventClose: input.eventClose === undefined ? before.eventClose : String(input.eventClose).trim(),
+    eventMaxHours: input.eventMaxHours === undefined ? before.eventMaxHours : Number(input.eventMaxHours),
   };
   const err = problem(next);
   if (err) throw new AppError(400, err);

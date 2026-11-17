@@ -129,5 +129,9 @@ module.exports = {
     // "auto": student bookings are approved straight away, like staff bookings.
     // "manual": they wait for the timetable office. Set in /admin → Settings.
     studentApproval: 'auto',
+    // Event rooms (the auditoriums): bookable from the usual opening time until this time the NEXT
+    // morning, for up to eventMaxHours. Both set in /admin → Settings.
+    eventClose: '05:00',
+    eventMaxHours: 12,
   },
 };

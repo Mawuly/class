@@ -40,6 +40,7 @@ const today = localDate();
 const tomorrow = localDate(new Date(Date.now() + 86400000));
 const clock = (t) => {
   const [h, m] = String(t).slice(0, 5).split(':').map(Number);
+  if (h === 24) return '12:00 AM';
   const suffix = h >= 12 ? 'PM' : 'AM';
   const hour = h % 12 === 0 ? 12 : h % 12;
   return `${hour}:${pad(m)} ${suffix}`;
@@ -73,8 +74,18 @@ const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const fromMin = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
 
 /** Start times every half hour (from the next half hour, today) and lengths of 1 to maxHours. */
+const DAY = 24 * 60;
+/** Rooms in view that are event rooms (auditoriums): they can be booked into the night. */
+const eventsInView = () => state.rooms.some((r) => r.extended_hours && (!state.building || r.building_code === state.building));
+/** "5:00 AM (next day)" for times past midnight, given minutes from the start of the chosen day. */
+const clockAt = (m) => `${clock(fromMin(m % DAY))}${m >= DAY ? ' (next day)' : ''}`;
+const periodMinutes = (p) => [toMin(p.start) + (p.startsNextDay ? DAY : 0), toMin(p.end) + (p.endsNextDay ? DAY : 0)];
+
 function fillTimeOptions() {
-  const { open, close, maxHours } = state.rules;
+  const { open, maxHours, eventClose, eventMaxHours } = state.rules;
+  const events = eventsInView();
+  // With event rooms in view, times and lengths reach into the night; other rooms say when they're open.
+  const close = events ? '24:00' : state.rules.close;
   let first = toMin(open);
   if (state.date === today) {
     const now = new Date();
@@ -89,8 +100,9 @@ function fillTimeOptions() {
   state.start = starts.includes(state.start) ? state.start : (preferred || '');
   startSel.value = state.start;
   startSel.disabled = !starts.length;
-  const roomLeft = state.start ? Math.floor((toMin(close) - toMin(state.start)) / 60) : 1;
-  const max = Math.max(1, Math.min(maxHours, roomLeft));
+  const lastEnd = events ? DAY + toMin(eventClose) : toMin(close);
+  const roomLeft = state.start ? Math.floor((lastEnd - toMin(state.start)) / 60) : 1;
+  const max = Math.max(1, Math.min(events ? Math.max(maxHours, eventMaxHours) : maxHours, roomLeft));
   state.hours = Math.min(state.hours, max);
   $('duration').replaceChildren(...Array.from({ length: max }, (_, i) => optionEl(String(i + 1), `${i + 1} hour${i ? 's' : ''}`)));
   $('duration').value = String(state.hours);
@@ -103,19 +115,26 @@ function fillTimeOptions() {
 function applyTime() {
   const len = state.hours * 60;
   const s = state.start ? toMin(state.start) : null;
+  const { open, close, maxHours, eventClose, eventMaxHours } = state.rules;
+  const slot = (start) => ({ start: fromMin(start), end: fromMin((start + len) % DAY), endsNextDay: start + len > DAY, endMin: start + len });
   for (const r of state.rooms) {
-    const periods = r.freePeriods || [];
-    const fits = s != null && periods.some((p) => toMin(p.start) <= s && s + len <= toMin(p.end));
-    r.free = fits ? { start: state.start, end: fromMin(s + len) } : null;
+    // This room's own hours: event rooms run into the next morning.
+    const lastEnd = r.extended_hours ? DAY + toMin(eventClose) : toMin(close);
+    const longest = (r.extended_hours ? eventMaxHours : maxHours) * 60;
+    r.outside = len > longest ? `At most ${longest / 60} h in this room`
+      : s != null && (s < toMin(open) || s + len > lastEnd)
+        ? `Open ${clock(open)} – ${r.extended_hours ? clockAt(lastEnd) : clock(close)}` : null;
+    const periods = (r.freePeriods || []).map(periodMinutes).filter(([ps]) => ps < DAY); // bookings start the same day
+    const fits = !r.outside && s != null && periods.some(([ps, pe]) => ps <= s && s + len <= pe);
+    r.free = fits ? slot(s) : null;
     r.next = null;
-    if (!fits) {
-      const slots = periods.map((p) => {
-        const from = Math.max(toMin(p.start), s ?? 0);
-        const start = Math.ceil(from / 30) * 30;
-        return start + len <= toMin(p.end) ? { start: fromMin(start), end: fromMin(start + len) } : null;
+    if (!fits && len <= longest) {
+      const candidates = periods.map(([ps, pe]) => {
+        const start = Math.ceil(Math.max(ps, s ?? 0) / 30) * 30;
+        return start < DAY && start + len <= pe ? slot(start) : null;
       }).filter(Boolean);
       // The next one after the chosen time; failing that, the earliest one that day.
-      r.next = slots[0] || periods.map((p) => (toMin(p.end) - toMin(p.start) >= len ? { start: p.start, end: fromMin(toMin(p.start) + len) } : null)).find(Boolean) || null;
+      r.next = candidates[0] || periods.map(([ps, pe]) => (pe - ps >= len ? slot(ps) : null)).find(Boolean) || null;
     }
   }
 }
@@ -295,7 +314,8 @@ async function loadRooms() {
   try {
     const data = await api(`/public/rooms?date=${encodeURIComponent(date)}`);
     state.rooms = data.rooms;
-    state.rules = { open: data.open, close: data.close, maxHours: data.maxHours, studentsNeedApproval: data.studentsNeedApproval };
+    state.rules = { open: data.open, close: data.close, maxHours: data.maxHours, studentsNeedApproval: data.studentsNeedApproval,
+      eventClose: data.eventClose || '05:00', eventMaxHours: data.eventMaxHours || 12 };
     fillTimeOptions();
     applyTime();
   } catch (err) {
@@ -337,6 +357,8 @@ function renderBuildings() {
       state.building = state.building === b.code ? '' : b.code;
       $('building').value = state.building;
       state.limit = 15;
+      fillTimeOptions();
+      applyTime();
       render();
     });
     c.setAttribute('aria-pressed', String(state.building === b.code));
@@ -361,21 +383,23 @@ function roomCard(r) {
   const card = el('article', 'room-card');
   const top = el('div', 'room-top');
   const periods = r.freePeriods || [];
-  const status = r.free ? 'Available' : periods.length ? `Busy at ${clock(state.start)}` : 'Fully booked';
+  const status = r.free ? 'Available' : r.outside ? 'Closed then' : periods.length ? `Busy at ${clock(state.start)}` : 'Fully booked';
   top.append(el('h3', '', r.code), el('span', `status ${r.free ? 'available' : 'unavailable'}`, status));
   card.append(top, el('p', '', r.name));
   card.append(el('p', 'room-detail', `${TYPE[r.type] || 'Classroom'} · ${r.capacity} seats`));
   // When it is free: the chosen time, or the free periods that day.
+  const span = (p) => { const [a, b] = periodMinutes(p); return `${clockAt(a)} – ${clockAt(b)}`; };
   card.append(el('p', 'room-when', r.free
-    ? `${clock(r.free.start)} – ${clock(r.free.end)} · ${dayLabel(state.date)}`
-    : periods.length
-      ? `Free ${periods.slice(0, 3).map((p) => `${clock(p.start)} – ${clock(p.end)}`).join(', ')}${periods.length > 3 ? ', …' : ''} · ${dayLabel(state.date)}`
-      : `No availability · ${dayLabel(state.date)}`));
+    ? `${clock(r.free.start)} – ${clockAt(r.free.endMin)} · ${dayLabel(state.date)}`
+    : `${r.outside ? `${r.outside}. ` : ''}${periods.length
+      ? `Free ${periods.slice(0, 3).map(span).join(', ')}${periods.length > 3 ? ', …' : ''} · ${dayLabel(state.date)}`
+      : `No availability · ${dayLabel(state.date)}`}`));
+  if (r.extended_hours) card.append(el('p', 'room-detail', `Events room · bookable until ${clock(state.rules.eventClose)} the next morning`));
   const staffOnly = state.user?.role === 'student' && r.bookable_by !== 'all';
   const slot = r.free || r.next;
   const label = staffOnly ? 'Staff only'
     : r.free ? 'Request this room'
-      : r.next ? `Request ${clock(r.next.start)} – ${clock(r.next.end)}`
+      : r.next ? `Request ${clock(r.next.start)} – ${clockAt(r.next.endMin)}`
         : periods.length ? `No ${state.hours} h slot free` : 'Fully booked';
   const book = button(label, '', () => requestRoom(r, slot));
   book.disabled = !slot || staffOnly;
@@ -416,7 +440,7 @@ function requestRoom(room, period) {
   // Students' bookings are confirmed straight away unless the office has chosen manual approval.
   const waits = !staff && state.rules.studentsNeedApproval;
   $('booking-title').textContent = `${waits ? 'Request' : 'Book'} ${room.code}`;
-  $('booking-slot').textContent = `${room.name} · ${dayLabel(period.date || state.date)} · ${clock(period.start)} – ${clock(period.end)}`;
+  $('booking-slot').textContent = `${room.name} · ${dayLabel(period.date || state.date)} · ${clock(period.start)} – ${clock(period.end)}${period.endsNextDay ? ' (next day)' : ''}`;
   $('booking-note').textContent = waits ? 'Approval required.' : 'Confirmed straight away. Check in at the door when it starts.';
   $('booking-form').querySelector('[type="submit"]').textContent = waits ? 'Send request' : 'Book room';
   $('booking-error').textContent = '';
@@ -510,7 +534,7 @@ function bookingRecord(b) {
   const extra = [b.course_code, b.supervisor].filter(Boolean).join(' · ');
   copy.append(
     el('h3', '', `${b.room_code} · ${b.title}`),
-    el('p', '', `${dayLabel(b.date)} · ${clock(b.start_time)} – ${clock(b.end_time)}${extra ? ` · ${extra}` : ''}`),
+    el('p', '', `${dayLabel(b.date)} · ${clock(b.start_time)} – ${b.next_day_end ? `${clock(b.next_day_end)} (next day)` : clock(b.end_time)}${extra ? ` · ${extra}` : ''}`),
   );
   const stateName = b.check_in_state;
   if (stateName === 'early' && b.date === today) {
@@ -627,6 +651,8 @@ $('duration').addEventListener('change', () => { state.hours = Number($('duratio
 $('building').addEventListener('change', () => {
   state.building = $('building').value;
   state.limit = 15;
+  fillTimeOptions();
+  applyTime();
   renderBuildings();
   renderRooms();
 });
@@ -640,6 +666,8 @@ $('all-buildings').addEventListener('click', () => {
   state.building = '';
   $('building').value = '';
   state.limit = 15;
+  fillTimeOptions();
+  applyTime();
   renderBuildings();
   renderRooms();
 });

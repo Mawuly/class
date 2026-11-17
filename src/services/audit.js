@@ -86,7 +86,7 @@ function describe(e) {
     'room.delete': [`deleted room ${d.code || ''}`.trim()],
     'room.block': [`closed ${e.target_room || 'a room'} on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `“${d.reason}”` : ''],
     'room.unblock': [`made ${e.target_room || 'a room'} available again on ${d.date ? day(d.date) : ''} ${d.start || ''}–${d.end || ''}`.replace(/\s+/g, ' ').trim(), d.reason ? `was closed for “${d.reason}”` : ''],
-    'settings.update': ['changed the booking window', Object.entries(d).map(([k, v]) => `${{ open: 'opens', close: 'closes', maxHours: 'longest booking', checkInLocation: 'check-in location', studentApproval: 'student requests' }[k] || k} ${v.from} → ${v.to}${k === 'maxHours' ? ' h' : ''}`).join(', ')],
+    'settings.update': ['changed the booking window', Object.entries(d).map(([k, v]) => `${{ open: 'opens', close: 'closes', maxHours: 'longest booking', checkInLocation: 'check-in location', studentApproval: 'student requests', eventClose: 'event rooms close', eventMaxHours: 'longest event booking' }[k] || k} ${v.from} → ${v.to}${k === 'maxHours' ? ' h' : ''}`).join(', ')],
     'booking.check_out': [`checked out of ${owner || 'their '}booking for ${booking} early`, d.ended ? `left at ${d.ended}, booked until ${d.planned_end}` : ''],
     'building.create': [`added building ${e.target_building || d.code || ''}`.trim()],
     'building.update': [`edited building ${e.target_building || d.code || ''}`.trim()],

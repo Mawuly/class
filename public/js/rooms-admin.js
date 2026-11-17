@@ -196,6 +196,9 @@ function openRoom(room, buildingId) {
     $(`input[value="${['lecture_hall', 'lab'].includes(type.value) ? 'staff' : 'all'}"]`, whoGroup).checked = true;
   });
   const fac = facilityPicker(v.facilities);
+  const events = h('input', { type: 'checkbox', name: 'extendedHours', checked: Boolean(v.extended_hours) });
+  const eventsBox = h('label', { class: 'check' }, events,
+    ' Event room: bookable until early the next morning (auditoriums). The hours are in Settings.');
   const errors = errorBox();
   const confirmBox = h('div', { class: 'clash', hidden: true, role: 'alert' });
 
@@ -204,6 +207,7 @@ function openRoom(room, buildingId) {
     h('div', { class: 'field-row' }, field('Room code', code, 'Shown everywhere, e.g. LT-2'), field('Name', name)),
     h('div', { class: 'field-row field-row--3' }, field('Type', type), field('Seats', capacity), field('Floor', floor, '0 = ground')),
     whoGroup,
+    eventsBox,
     h('div', { class: 'field' }, h('span', { class: 'field__label' }, 'Facilities'), fac.el),
     errors,
     h('div', { class: 'sheet__actions' },
@@ -217,6 +221,7 @@ function openRoom(room, buildingId) {
       buildingId: Number(building.value), code: code.value, name: name.value, type: type.value,
       capacity: Number(capacity.value), floor: floor.value, facilities: fac.value(),
       bookableBy: $('input[name="bookableBy"]:checked', form)?.value,
+      extendedHours: events.checked,
     };
     try {
       if (editing) await api(`/admin/rooms/${room.id}`, { method: 'PATCH', body: payload });

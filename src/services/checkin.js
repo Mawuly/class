@@ -43,11 +43,15 @@ async function releaseNoShows(now = new Date()) {
     const released = await x.all(
       `UPDATE bookings b SET status = 'released', released_at = ?, updated_at = ?
        FROM rooms r
-       WHERE r.id = b.room_id AND b.status = 'approved' AND b.checked_in_at IS NULL
+       WHERE r.id = b.room_id AND b.status = 'approved' AND b.checked_in_at IS NULL AND b.parent_id IS NULL
          AND b.date = ? AND b.start_time <= ? AND b.end_time > ? AND b.updated_at <= ?
        RETURNING b.id, b.user_id, b.kind, b.date, b.start_time, b.end_time, r.code AS room_code`,
       [now, now, today, cutoff, t.localTime(now), graceAgo],
     );
+    if (released.length) {
+      await x.run("UPDATE bookings SET status = 'released', released_at = ?, updated_at = ? WHERE parent_id = ANY(?::int[]) AND status = 'approved'",
+        [now, now, released.map((b) => b.id)]);
+    }
     for (const b of released) {
       const deadline = t.fromMinutes(t.toMinutes(b.start_time) + rules.checkInGraceMinutes);
       // A timetable class belongs to the office: it is logged, not sent to the office as a notice.
@@ -135,7 +139,7 @@ async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}
   const all = await db.all(
     `SELECT id, user_id, kind, title, course_code, date, start_time, end_time, status, checked_in_at FROM bookings
      WHERE room_id = ? AND date = ? AND end_time > ? AND status IN ('pending', 'approved', 'released')
-       AND (user_id = ? OR kind = 'timetable')
+       AND (user_id = ? OR kind = 'timetable') AND parent_id IS NULL
      ORDER BY start_time`,
     [room.id, today, time, user.id],
   );
@@ -202,7 +206,7 @@ async function door(rawCode, user) {
   const time = t.localTime(now);
   const isOpen = time >= rules.open && time < rules.close;
   const rows = await db.all(
-    `SELECT id, user_id, kind, title, course_code, lecturer, category, start_time, end_time, status, checked_in_at FROM bookings
+    `SELECT id, user_id, kind, title, course_code, lecturer, category, start_time, end_time, status, checked_in_at, parent_id FROM bookings
      WHERE room_id = ? AND date = ? AND end_time > ? AND status IN ${HOLDING} ORDER BY start_time`,
     [room.id, date, time],
   );
@@ -214,7 +218,7 @@ async function door(rawCode, user) {
     mine: Boolean(user && b.user_id === user.id),
     ...(user ? { title: b.title, courseCode: b.course_code, lecturer: b.lecturer } : {}),
     timetable: b.kind === 'timetable',
-    ...(b.status === 'approved' && !b.checked_in_at ? { checkInBy: checkInState({ ...b, date }, now).deadline } : {}),
+    ...(b.status === 'approved' && !b.checked_in_at && !b.parent_id ? { checkInBy: checkInState({ ...b, date }, now).deadline } : {}),
   });
   const current = rows.find((b) => b.start_time <= time);
   const blocks = await db.all(
@@ -228,6 +232,7 @@ async function door(rawCode, user) {
     const own = await db.get(
       `SELECT id, title, date, start_time, end_time, status, checked_in_at FROM bookings
        WHERE user_id = ? AND room_id = ? AND date = ? AND end_time > ? AND status IN ('pending', 'approved', 'released')
+         AND parent_id IS NULL
        ORDER BY start_time LIMIT 1`,
       [user.id, room.id, date, time],
     );
@@ -272,7 +277,7 @@ async function door(rawCode, user) {
     // A timetable class on now (or about to start) that anyone signed in here can check in.
     class: (() => {
       if (!user || (mine && ['open', 'checked-in'].includes(mine.state))) return null;
-      const c = rows.find((b) => b.kind === 'timetable' && b.user_id !== user.id && ['open', 'checked-in'].includes(checkInState({ ...b, date }, now).state));
+      const c = rows.find((b) => b.kind === 'timetable' && !b.parent_id && b.user_id !== user.id && ['open', 'checked-in'].includes(checkInState({ ...b, date }, now).state));
       return c ? { id: c.id, title: c.title, courseCode: c.course_code, lecturer: c.lecturer, start: c.start_time, end: c.end_time,
         ...checkInState({ ...c, date }, now) } : null;
     })(),

@@ -9,7 +9,7 @@ const { directionsUrl } = require('../utils/geo');
 const TYPES = ['lecture_hall', 'lab', 'seminar', 'study', 'meeting'];
 const HOLDING = "('pending', 'approved')";
 
-const ROOM_COLUMNS = `r.id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by,
+const ROOM_COLUMNS = `r.id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by, r.extended_hours,
   r.building_id, bl.code AS building_code, bl.name AS building_name,
   bl.latitude AS building_latitude, bl.longitude AS building_longitude, bl.radius_m AS building_radius_m`;
 const ROOM_FROM = 'rooms r JOIN buildings bl ON bl.id = r.building_id';
@@ -225,6 +225,24 @@ function freePeriods(taken, from, close) {
 }
 
 /**
+ * Free periods in minutes from `from` to `to` (both may pass 24:00), at least an hour, starting on
+ * the half hour. `busy` is a list of [start, end] in the same minutes.
+ */
+function freeMinutes(busy, from, to) {
+  const slot = rules.slotMinutes;
+  const out = [];
+  let cursor = Math.ceil(from / slot) * slot;
+  for (const [s, e] of [...busy].sort((a, b) => a[0] - b[0]).concat([[to, to]])) {
+    const gapEnd = Math.min(s, to);
+    if (gapEnd - cursor >= 60) out.push([cursor, gapEnd]);
+    cursor = Math.max(cursor, Math.ceil(e / slot) * slot);
+    if (cursor >= to) break;
+  }
+  return out;
+}
+const asTime = (m) => t.fromMinutes(m % (24 * 60));
+
+/**
  * Public list for the site before sign-in: every active room with its free periods on a date
  * (from now, if the date is today). Never shows booking titles or who booked.
  */
@@ -235,13 +253,18 @@ async function publicRooms({ date } = {}, at = new Date()) {
   if (day < today) throw new AppError(400, 'Choose today or a later date');
   if (t.daysBetween(today, day) > rules.maxDaysAhead) throw new AppError(400, `Rooms can be booked at most ${rules.maxDaysAhead} days ahead`);
   const rooms = await db.all(`SELECT ${ROOM_COLUMNS} FROM ${ROOM_FROM} WHERE r.is_active ORDER BY bl.code, ${naturalCode('r.code')}`);
+  // Event rooms run into the next morning, so the next date's early hours count for them too.
+  const next = t.addDays(day, 1);
   const taken = await db.all(
-    `SELECT room_id, start_time, end_time FROM bookings WHERE date = ? AND status IN ${HOLDING}
-     UNION ALL SELECT room_id, start_time, end_time FROM room_blocks WHERE date = ?`,
-    [day, day],
+    `SELECT room_id, date, start_time, end_time FROM bookings WHERE date IN (?, ?) AND status IN ${HOLDING}
+     UNION ALL SELECT room_id, date, start_time, end_time FROM room_blocks WHERE date IN (?, ?)`,
+    [day, next, day, next],
   );
   const byRoom = new Map();
-  for (const b of taken) byRoom.set(b.room_id, [...(byRoom.get(b.room_id) || []), b]);
+  for (const b of taken) {
+    const shift = b.date === day ? 0 : 24 * 60;
+    byRoom.set(b.room_id, [...(byRoom.get(b.room_id) || []), [t.toMinutes(b.start_time) + shift, t.toMinutes(b.end_time) + shift]]);
+  }
   const now = t.localTime(at);
   const from = day === today && now > rules.open ? now : rules.open;
   return {
@@ -251,8 +274,17 @@ async function publicRooms({ date } = {}, at = new Date()) {
     maxHours: rules.maxHours,
     // Whether student requests wait for the timetable office (the page words its buttons from this).
     studentsNeedApproval: rules.studentApproval === 'manual',
+    // Event rooms: bookable until eventClose the next morning, for up to eventMaxHours.
+    eventClose: rules.eventClose,
+    eventMaxHours: rules.eventMaxHours,
     rooms: rooms.map((r) => {
-      const periods = freePeriods(byRoom.get(r.id) || [], from, rules.close);
+      const busy = byRoom.get(r.id) || [];
+      const end = r.extended_hours ? 24 * 60 + t.toMinutes(rules.eventClose) : t.toMinutes(rules.close);
+      // A period that runs past midnight says so (endsNextDay); one starting after it, startsNextDay.
+      const periods = freeMinutes(busy.filter(([s]) => s < end), t.toMinutes(from), end).map(([s, e]) => ({
+        start: asTime(s), end: asTime(e),
+        ...(s >= 24 * 60 ? { startsNextDay: true } : {}), ...(e >= 24 * 60 ? { endsNextDay: true } : {}),
+      }));
       const { building_id: _b, ...room } = shapeRoom(r);
       // `free` is what the public site reads; `firstFree` is the name in the implementation guide.
       return { ...room, freePeriods: periods, firstFree: periods[0] || null, free: periods[0] || null };

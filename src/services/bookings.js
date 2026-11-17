@@ -111,7 +111,7 @@ async function prepare(user, input) {
   if (!CATEGORIES.includes(d.category)) throw new AppError(400, 'Choose a valid category');
   if (!Number.isInteger(d.attendees) || d.attendees < 1) throw new AppError(400, 'Attendees must be a whole number of at least 1');
 
-  const room = await db.get('SELECT id, code, capacity, bookable_by FROM rooms WHERE id = ? AND is_active', [d.roomId]);
+  const room = await db.get('SELECT id, code, capacity, bookable_by, extended_hours FROM rooms WHERE id = ? AND is_active', [d.roomId]);
   if (!room) throw new AppError(404, 'Room not found');
 
   if (user.role === 'student') {
@@ -128,14 +128,43 @@ async function prepare(user, input) {
   return { d, room, status: waits ? 'pending' : 'approved' };
 }
 
+/**
+ * The rows a booking is stored as: one, or for an event room booked past midnight two, the second
+ * on the next date from 00:00 (see schema version 17). Throws when the time breaks the rules.
+ */
+function partsOf(d, room) {
+  if (!room.extended_hours) {
+    const slotError = t.validateSlot(d);
+    if (slotError) throw new AppError(400, slotError);
+    return [{ date: d.date, start: d.start, end: d.end }];
+  }
+  const ev = t.validateEventSlot(d);
+  if (ev.error) throw new AppError(400, ev.error);
+  const untilMidnight = ev.overnight || d.end === '00:00';
+  const parts = [{ date: d.date, start: d.start, end: untilMidnight ? '24:00' : d.end }];
+  if (ev.nextDayEnd) parts.push({ date: t.addDays(d.date, 1), start: '00:00', end: ev.nextDayEnd });
+  return parts;
+}
+
 async function create(user, input, { ip } = {}) {
   const { d, room, status } = await prepare(user, input);
-  const slotError = t.validateSlot(d);
-  if (slotError) throw new AppError(400, slotError);
+  const parts = partsOf(d, room);
+  const nextDay = (p) => (p.date !== d.date ? ' the next morning' : '');
 
   const id = await db.tx(async (x) => {
     // Friendly checks first, so the user is told what is in the way and offered another slot.
     // The exclusion constraints in schema.sql still catch a request that slips in between.
+    for (const p of parts.slice(1)) {
+      const rc = await roomClashes(x, d.roomId, p.date, p.start, p.end);
+      const bc = await blockClashes(x, d.roomId, p.date, p.start, p.end);
+      const uc = await userClashes(x, user.id, p.date, p.start, p.end);
+      const c = rc[0] || bc[0] || uc[0];
+      if (c) {
+        throw new AppError(409, `${room.code} is not free ${c.start_time}–${c.end_time}${nextDay(p)}${c.reason ? `: ${c.reason}` : ''}`,
+          { clash: rc[0] ? 'room' : bc[0] ? 'unavailable' : 'user', conflicts: [c] });
+      }
+    }
+    d.end = parts[0].end;
     const roomConflicts = await roomClashes(x, d.roomId, d.date, d.start, d.end);
     if (roomConflicts.length) {
       const c = roomConflicts[0];
@@ -167,7 +196,16 @@ async function create(user, input, { ip } = {}) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [d.roomId, user.id, d.title, d.category, d.courseCode, d.supervisor, d.date, d.start, d.end, d.attendees, d.notes, status],
     );
-    await audit({ userId: user.id, action: 'booking.create', entity: 'booking', entityId: rows[0].id, details: { status }, ip }, x);
+    // Past midnight: the continuation on the next date, which follows this booking everywhere.
+    for (const p of parts.slice(1)) {
+      await x.run(
+        `INSERT INTO bookings (room_id, user_id, title, category, course_code, supervisor, date, start_time, end_time, attendees, notes, status, parent_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [d.roomId, user.id, d.title, d.category, d.courseCode, d.supervisor, p.date, p.start, p.end, d.attendees, d.notes, status, rows[0].id],
+      );
+    }
+    await audit({ userId: user.id, action: 'booking.create', entity: 'booking', entityId: rows[0].id,
+      details: { status, ...(parts[1] ? { until: `${parts[1].end} next day` } : {}) }, ip }, x);
     return rows[0].id;
   }).catch((err) => {
     if (err.code === EXCLUSION_VIOLATION && err.constraint === 'bookings_reject_room_blocks') {
@@ -324,7 +362,9 @@ async function listMineRows(user, scope = 'upcoming') {
     ? '(b.date > ? OR (b.date = ? AND b.end_time > ?))'
     : '(b.date < ? OR (b.date = ? AND b.end_time <= ?))';
   return db.all(
-    `SELECT ${BOOKING_COLUMNS} FROM ${BOOKING_FROM} WHERE b.user_id = ? AND ${where}
+    `SELECT ${BOOKING_COLUMNS},
+            (SELECT c.end_time FROM bookings c WHERE c.parent_id = b.id AND c.status = b.status LIMIT 1) AS next_day_end
+     FROM ${BOOKING_FROM} WHERE b.user_id = ? AND b.parent_id IS NULL AND ${where}
      ORDER BY b.date ${upcoming ? 'ASC' : 'DESC'}, b.start_time ${upcoming ? 'ASC' : 'DESC'} LIMIT 200`,
     [user.id, today, today, now],
   );
@@ -339,7 +379,7 @@ async function cancel(user, id, { ip } = {}) {
     throw new AppError(400, 'This booking has already finished');
   }
   await db.tx(async (x) => {
-    await x.run("UPDATE bookings SET status = 'cancelled', updated_at = now() WHERE id = ?", [id]);
+    await x.run("UPDATE bookings SET status = 'cancelled', updated_at = now() WHERE id = ? OR (parent_id = ? AND status IN ('pending', 'approved'))", [id, id]);
     await audit({ userId: user.id, action: 'booking.cancel', entity: 'booking', entityId: id, ip }, x);
     if (b.user_id !== user.id) await notify(b.user_id, `Your booking for ${describe(b)} was cancelled by the timetable office.`, x);
   });
@@ -359,6 +399,17 @@ async function checkOut(user, id, { ip } = {}) {
   const now = new Date();
   const today = t.localDate(now);
   const time = t.localTime(now);
+  const next = await db.get("SELECT id, date, end_time FROM bookings WHERE parent_id = ? AND status = 'approved'", [id]);
+  // An overnight booking after midnight: the part on today's date ends now.
+  if (next && next.date === today && time < next.end_time) {
+    await db.tx(async (x) => {
+      await x.run('UPDATE bookings SET end_time = ?, updated_at = ? WHERE id = ?', [time > '00:00' ? time : '00:30', now, next.id]);
+      await x.run('UPDATE bookings SET checked_out_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+      await audit({ userId: user.id, action: 'booking.check_out', entity: 'booking', entityId: id,
+        details: { planned_end: `${next.end_time} next day`, ended: time }, ip }, x);
+    });
+    return getBooking(id);
+  }
   if (b.date !== today || time <= b.start_time) throw new AppError(409, `You can check out once the booking has started (${b.start_time})`);
   if (time >= b.end_time) throw new AppError(409, 'This booking has already finished');
   await db.tx(async (x) => {
@@ -366,6 +417,7 @@ async function checkOut(user, id, { ip } = {}) {
       `UPDATE bookings SET end_time = ?, checked_out_at = ?, updated_at = ? WHERE id = ? AND checked_out_at IS NULL`,
       [time, now, now, id],
     );
+    if (next) await x.run("UPDATE bookings SET status = 'cancelled', updated_at = ? WHERE id = ?", [now, next.id]);
     await audit({ userId: user.id, action: 'booking.check_out', entity: 'booking', entityId: id,
       details: { planned_end: b.end_time, ended: time }, ip }, x);
   });
@@ -443,6 +495,10 @@ async function decide(admin, id, decision, reason, { ip } = {}) {
       [decision, admin.id, cleanReason, id],
     );
     if (!changes) throw new AppError(409, 'This booking was decided by someone else');
+    await x.run(
+      `UPDATE bookings SET status = ?, decided_by = ?, decision_reason = ?, updated_at = now() WHERE parent_id = ? AND status = 'pending'`,
+      [decision, admin.id, cleanReason, id],
+    );
     const verb = decision === 'approved' ? 'approved' : 'rejected';
     await notify(b.user_id, `Your booking for ${describe(b)} was ${verb}.${cleanReason ? ` Reason: ${cleanReason}` : ''}`, x);
     await audit({ userId: admin.id, action: `booking.${verb === 'approved' ? 'approve' : 'reject'}`, entity: 'booking', entityId: id, details: cleanReason ? { reason: cleanReason } : null, ip }, x);

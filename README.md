@@ -296,3 +296,16 @@ or student) can check a class in, subject to the location check. If nobody check
 period (15 minutes), the lecture is released and the room shows as **available**. Releases of
 timetable lectures are logged but not sent to the office as notices. **Remove remaining lectures**
 takes a timetable off.
+
+
+## Event rooms (auditoriums): bookable overnight
+
+The auditoriums (MAIN-AUD, LLT, SMS-AUD, CALC-AUD) are **event rooms**: bookable from the usual opening
+time until **05:00 the next morning**, for up to **12 hours** (e.g. 6 PM – 5 AM). Both are set in
+`/admin` → **Settings** → Event rooms; mark or unmark any room in Rooms → Edit ("Event room"). Other
+rooms keep the normal booking window. On the main page the time choices reach into the night when
+event rooms are in view, and each room card says whether that room is open then.
+
+A booking past midnight is stored as two linked rows (until 24:00, then from 00:00 the next date), so
+every clash rule covers both; it is shown, cancelled, checked in, released and exported to calendars as
+one booking.

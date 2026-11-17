@@ -95,6 +95,8 @@ function cleanRoom(input, partial = false) {
     out.bookable_by = s(input.bookableBy) || (['lecture_hall', 'lab'].includes(out.type) ? 'staff' : 'all');
     if (!['staff', 'all'].includes(out.bookable_by)) throw new AppError(400, 'Choose who can book the room');
   }
+  // Event room: bookable until early the next morning (/admin → Settings sets the hours).
+  if (input.extendedHours !== undefined) out.extended_hours = input.extendedHours === true || input.extendedHours === 'true';
   return out;
 }
 
@@ -119,7 +121,7 @@ async function overview() {
   );
   const rooms = await db.all(
     `SELECT r.id, r.building_id, bl.code AS building_code, bl.name AS building_name, r.code, r.name, r.type,
-            r.capacity, r.floor, r.facilities, r.bookable_by, r.is_active, r.door_code,
+            r.capacity, r.floor, r.facilities, r.bookable_by, r.is_active, r.door_code, r.extended_hours,
             count(b.id)::int AS total_bookings,
             count(b.id) FILTER (WHERE b.status IN ${HOLDING}
               AND (b.date > ? OR (b.date = ? AND b.end_time > ?)))::int AS upcoming
@@ -176,9 +178,9 @@ async function deleteBuilding(admin, id, { ip } = {}) {
 async function createRoom(admin, input, { ip } = {}) {
   const r = cleanRoom(input);
   const row = await db.get(
-    `INSERT INTO rooms (building_id, code, name, type, capacity, floor, facilities, bookable_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-    [r.building_id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by],
+    `INSERT INTO rooms (building_id, code, name, type, capacity, floor, facilities, bookable_by, extended_hours)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    [r.building_id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by, r.extended_hours ?? false],
   ).catch((err) => friendly(err, 'room', r.code));
   await audit({ userId: admin.id, action: 'room.create', entity: 'room', entityId: row.id, details: { code: r.code }, ip });
   return row;

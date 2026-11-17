@@ -401,6 +401,15 @@ ALTER TABLE bookings ADD CONSTRAINT bookings_no_user_overlap EXCLUDE USING gist 
 ) WHERE (status IN ('pending', 'approved') AND kind = 'booking');
 CREATE INDEX IF NOT EXISTS idx_bookings_kind ON bookings (kind) WHERE kind <> 'booking';
 
+-- Event rooms and overnight bookings (schema version 17). Event rooms (the auditoriums) can be booked
+-- until early the next morning. A booking that runs past midnight is stored as two rows: the main one
+-- on its own date until 24:00, and a continuation (parent_id) on the next date from 00:00. Each row is
+-- an ordinary booking, so every clash rule above applies to both; the continuation follows its parent
+-- (cancelled, released and checked in together) and is never shown or checked in on its own.
+ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS extended_hours boolean NOT NULL DEFAULT false;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS parent_id integer REFERENCES bookings(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_bookings_parent ON bookings (parent_id) WHERE parent_id IS NOT NULL;
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

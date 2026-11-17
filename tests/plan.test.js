@@ -116,7 +116,7 @@ describe('booking window and whole hours', () => {
   });
 
   test('defaults: 06:30–20:30, starts every half hour, whole hours up to 4', async () => {
-    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4, checkInLocation: 'required', studentApproval: 'manual' });
+    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4, checkInLocation: 'required', studentApproval: 'manual', eventClose: '05:00', eventMaxHours: 12 });
     const meta = (await lecturer.get('/api/rooms/meta')).body.rules;
     assert.deepEqual([meta.open, meta.close, meta.maxHours], ['06:30', '20:30', 4]);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '10:30')).body.error, /whole hours/);
@@ -126,7 +126,7 @@ describe('booking window and whole hours', () => {
 
   test('the office changes the window; it applies at once and is logged', async () => {
     const res = await admin.patch('/api/admin/settings').send({ open: '08:00', close: '18:00', maxHours: 2 });
-    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2, checkInLocation: 'required', studentApproval: 'manual' });
+    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2, checkInLocation: 'required', studentApproval: 'manual', eventClose: '05:00', eventMaxHours: 12 });
     assert.match((await book(lecturer, 'LT-1', date, '07:00', '08:00')).body.error, /between 08:00 and 18:00/);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '12:00')).body.error, /at most 2 hours/);
     assert.equal((await book(lecturer, 'LT-1', date, '16:00', '18:00')).status, 201);
@@ -265,5 +265,67 @@ describe('student requests approved automatically', () => {
     const later = await book(student, 'LIB-S2', tomorrow(), '14:00', '15:00', { category: 'study', attendees: 3 });
     assert.equal(later.body.booking.status, 'pending');
     assert.match((await admin.patch('/api/admin/settings').send({ studentApproval: 'never' })).body.error, /auto" or "manual/);
+  });
+});
+
+describe('event rooms: bookable overnight', () => {
+  let admin; let lecturer; let date; let next; let hall;
+  beforeEach(async () => {
+    await resetDb();
+    admin = await signedIn('boss@campus.test');
+    lecturer = await signedIn('ama@campus.test', 'lecturer');
+    date = tomorrow();
+    next = addDays(date, 1);
+    hall = await roomId('NAB-001');
+    await db.run('UPDATE rooms SET extended_hours = true WHERE id = ?', [hall]);
+  });
+  const parts = (id) => db.all('SELECT date, start_time, end_time, status, parent_id FROM bookings WHERE id = ? OR parent_id = ? ORDER BY id', [id, id]);
+
+  test('6 PM to 5 AM is one booking, stored as two linked parts that both hold the room', async () => {
+    const res = await book(lecturer, 'NAB-001', date, '18:00', '05:00', { category: 'event', attendees: 200, title: 'Hall week' });
+    assert.equal(res.status, 201);
+    const id = res.body.booking.id;
+    assert.deepEqual((await parts(id)).map((p) => [p.date, p.start_time, p.end_time, p.status, p.parent_id]), [
+      [date, '18:00', '24:00', 'approved', null], [next, '00:00', '05:00', 'approved', id],
+    ]);
+    // Both parts are taken: a clash before and after midnight.
+    assert.equal((await book(admin, 'NAB-001', date, '22:00', '23:00', { category: 'event' })).status, 409);
+    const after = await book(admin, 'NAB-001', next, '07:00', '08:00', { category: 'meeting' });
+    assert.equal(after.status, 201, 'free again in the morning');
+    const mine = (await lecturer.get('/api/bookings/mine')).body.bookings;
+    assert.deepEqual(mine.map((b) => [b.start_time, b.end_time, b.next_day_end]), [['18:00', '24:00', '05:00']], 'shown once, with the next-day end');
+    const day = (await agent().get(`/api/public/rooms?date=${date}`)).body;
+    const free = day.rooms.find((r) => r.code === 'NAB-001');
+    assert.equal(free.extended_hours, true);
+    assert.deepEqual(free.freePeriods.at(-1), { start: '06:30', end: '18:00' });
+    // Cancelling cancels both parts.
+    await lecturer.post(`/api/bookings/${id}/cancel`);
+    assert.deepEqual((await parts(id)).map((p) => p.status), ['cancelled', 'cancelled']);
+  });
+
+  test('the rules: only event rooms, until 05:00, at most 12 hours (both set in Settings)', async () => {
+    assert.match((await book(lecturer, 'LT-1', date, '18:00', '22:00')).body.error, /between 06:30 and 20:30/);
+    assert.match((await book(lecturer, 'NAB-001', date, '18:00', '06:00', { category: 'event' })).body.error, /until 05:00 the next morning/);
+    assert.match((await book(lecturer, 'NAB-001', date, '08:00', '21:00', { category: 'event' })).body.error, /at most 12 hours/);
+    assert.equal((await book(lecturer, 'NAB-001', date, '07:00', '18:00', { category: 'event' })).status, 201, '11 hours in the day is fine');
+    await admin.patch('/api/admin/settings').send({ eventClose: '02:00', eventMaxHours: 6 });
+    assert.match((await book(admin, 'NAB-001', next, '20:00', '03:00', { category: 'event' })).body.error, /until 02:00/);
+    assert.equal((await book(admin, 'NAB-001', next, '20:00', '02:00', { category: 'event' })).status, 201);
+    assert.match((await admin.patch('/api/admin/settings').send({ eventMaxHours: 30 })).body.error, /1 to 24/);
+  });
+
+  test('an overnight booking nobody checks in to is released whole; its calendar event ends next morning', async () => {
+    const res = await book(lecturer, 'NAB-001', date, '19:00', '04:00', { category: 'event', title: 'Gala' });
+    const id = res.body.booking.id;
+    const ics = await lecturer.raw.get(`/api/bookings/${id}/calendar.ics`).buffer(true)
+      .parse((r, done) => { let s = ''; r.on('data', (c) => { s += c; }); r.on('end', () => done(null, s)); });
+    assert.match(ics.body, new RegExp(`DTEND[^:]*:${next.replace(/-/g, '')}T040000`));
+    assert.equal((ics.body.match(/BEGIN:VEVENT/g) || []).length, 1);
+    // Pretend the start has passed without a check-in.
+    await db.run("UPDATE bookings SET date = current_date, start_time = '00:30', updated_at = now() - interval '1 day' WHERE id = ?", [id]);
+    await db.run("UPDATE bookings SET date = current_date + 1 WHERE parent_id = ?", [id]);
+    const { releaseNoShows } = require('../src/services/checkin');
+    await releaseNoShows(new Date(new Date().setHours(1, 0, 0, 0)));
+    assert.deepEqual((await parts(id)).map((p) => p.status), ['released', 'released']);
   });
 });

@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('./index');
 const { seedReference, seedDemo } = require('./seed');
-const { switchToCampus, applyCampusArea, applyBuildingLocations } = require('./campus');
+const { switchToCampus, applyCampusArea, applyBuildingLocations, applyEventRooms } = require('./campus');
 
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
@@ -19,7 +19,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   10: booking window in app_meta   11: bookings.supervisor   12: bookings.checked_out_at
 //   13: users.google_sub (Continue with Google)   14: building locations, check-in location label
 //   15: check-in radius up to 5 km (campus-wide area)   16: timetable lectures, class check-in
-const SCHEMA_VERSION = 16;
+//   17: event rooms (extended hours) and overnight bookings
+const SCHEMA_VERSION = 17;
 
 let ready = null;
 
@@ -68,6 +69,8 @@ function ensureReady() {
     // Then each building's own point, where known (never over a point the office set).
     const pinned = await applyBuildingLocations(x, config.campus);
     if (pinned) console.log(`[setup] set the location of ${pinned} buildings`);
+    const events = await applyEventRooms(x, config.campus);
+    if (events) console.log(`[setup] made ${events} auditoriums event rooms (bookable overnight)`);
     // Demo rooms kept for bookings that were still coming up: hide them once those are over.
     await x.run(
       `UPDATE rooms r SET is_active = false WHERE r.is_active AND r.code LIKE 'DEMO-%' AND NOT EXISTS (

@@ -169,7 +169,7 @@ async function attendanceFor(range, bFilter, bArg) {
             count(*) FILTER (WHERE b.checkin_location = 'unknown')::int AS unknown,
             count(*) FILTER (WHERE b.checkin_location = 'unchecked')::int AS unchecked
      FROM bookings b JOIN rooms r ON r.id = b.room_id
-     WHERE b.status IN ('approved', 'released') AND b.date BETWEEN ? AND ?
+     WHERE b.status IN ('approved', 'released') AND b.parent_id IS NULL AND b.date BETWEEN ? AND ?
        AND (b.checked_in_at IS NOT NULL OR b.date < ? OR (b.date = ? AND b.start_time <= ?)) ${bFilter}`,
     [from, range.to, today, today, graceAgo, ...bArg],
   );

@@ -12,7 +12,8 @@ const CATEGORY = { lecture: 'Lecture', tutorial: 'Tutorial', lab: 'Practical', e
 
 const COLUMNS = `b.id, b.title, b.category, b.course_code, b.date, b.start_time, b.end_time, b.attendees, b.notes,
   b.status, b.series_id, b.updated_at, r.id AS room_id, r.code AS room_code, r.name AS room_name,
-  bl.name AS building_name`;
+  bl.name AS building_name,
+  (SELECT c.end_time FROM bookings c WHERE c.parent_id = b.id AND c.status = b.status LIMIT 1) AS next_day_end`;
 const FROM = 'bookings b JOIN rooms r ON r.id = b.room_id JOIN buildings bl ON bl.id = r.building_id';
 
 const hash = (token) => crypto.createHash('sha256').update(token).digest('hex');
@@ -31,7 +32,10 @@ function toEvent(b, baseUrl) {
   return {
     uid: `booking-${b.id}@lecture-rooms`,
     start: { date: b.date, time: b.start_time },
-    end: { date: b.date, time: b.end_time },
+    // Past midnight (or ending at 24:00): the event ends on the next date.
+    end: b.next_day_end || b.end_time === '24:00'
+      ? { date: t.addDays(b.date, 1), time: b.next_day_end || '00:00' }
+      : { date: b.date, time: b.end_time },
     summary: `${b.status === 'pending' ? '[Awaiting approval] ' : ''}${label} (${b.room_code})`,
     location: `${b.room_code}, ${b.room_name}, ${b.building_name}`,
     description,
@@ -47,7 +51,7 @@ async function download(user, baseUrl) {
   const today = t.localDate();
   const rows = await db.all(
     `SELECT ${COLUMNS} FROM ${FROM}
-     WHERE b.user_id = ? AND b.status IN ('approved', 'pending') AND b.date >= ?
+     WHERE b.user_id = ? AND b.parent_id IS NULL AND b.status IN ('approved', 'pending') AND b.date >= ?
      ORDER BY b.date, b.start_time LIMIT 1000`,
     [user.id, today],
   );
@@ -70,7 +74,7 @@ async function feed(token, baseUrl) {
   const user = await db.get('SELECT id, name FROM users WHERE calendar_token_hash = ? AND is_active', [hash(token)]);
   if (!user) throw new AppError(404, 'Calendar not found');
   const rows = await db.all(
-    `SELECT ${COLUMNS} FROM ${FROM} WHERE b.user_id = ? AND b.date >= ? ORDER BY b.date, b.start_time LIMIT 2000`,
+    `SELECT ${COLUMNS} FROM ${FROM} WHERE b.user_id = ? AND b.parent_id IS NULL AND b.date >= ? ORDER BY b.date, b.start_time LIMIT 2000`,
     [user.id, t.addDays(t.localDate(), -60)],
   );
   return ics.calendar({ name: `Lecture Rooms: ${user.name}`, events: rows.map((b) => toEvent(b, baseUrl)) });
