@@ -1,0 +1,8 @@
+/* The University of Cape Coast crest as the site logo, in place of the "UCC" badge. */
+.crest--img { clip-path: none !important; background: none !important; object-fit: contain; display: block; }
+.identity .crest--img { width: 45px; height: 52px; }
+.brand .crest--img { width: 33px; height: 38px; }
+@media (max-width: 760px) { .identity .crest--img { width: 34px; height: 39px; } }
+@media (max-width: 600px) { .identity .crest--img { width: 28px; height: 32px; } }
+.account-brand .identity { display: inline-flex; align-items: center; gap: 12px; }
+.account-brand .crest--img { width: 40px; height: 46px; background: #fff !important; border-radius: 6px; padding: 3px; }

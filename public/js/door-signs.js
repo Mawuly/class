@@ -8,7 +8,7 @@ const roomId = new URLSearchParams(location.search).get('room');
 function sign(s, rules) {
   return h('article', { class: 'sign' },
     h('header', { class: 'sign__band' },
-      h('span', { class: 'sign__crest' }, 'UCC'),
+      h('img', { class: 'sign__crest sign__crest--img', src: '/media/ucc-crest.webp', alt: 'University of Cape Coast crest', width: '34', height: '39' }),
       h('span', { class: 'sign__brand' }, 'UCC Spaces', h('small', {}, 'University of Cape Coast'))),
     h('p', { class: 'sign__code mono' }, s.code),
     h('p', { class: 'sign__name' }, [...new Set([s.name, s.building_name])].join(' · ') + ` · ${s.capacity} seats`),

@@ -29,7 +29,13 @@
 .sign__rule { color: #40536b; border-top: 1px solid var(--line); margin: 6px 22px 0; }
 .sign__url { color: #6c7b8f; }
 
+/* The university crest on a white tile, so its colours stay true on the navy band. */
+.sign__crest--img {
+  width: 40px; height: 46px; padding: 3px; clip-path: none; background: #fff; border-radius: 6px; object-fit: contain;
+}
+
 @media print {
+  .sign__crest--img { width: 18mm; height: 21mm; padding: 1mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign { border: 0; box-shadow: none; border-radius: 0; padding: 0 0 12mm; min-height: 265mm; align-content: start; }
   .sign__band { padding: 8mm 10mm; margin-bottom: 10mm; border-bottom-width: 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign__crest { width: 14mm; height: 16mm; font-size: 12pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
