@@ -107,7 +107,7 @@ const UCC_LOCATIONS = {
   LAW: { latitude: 5.117689, longitude: -1.292983, radiusM: 150 },   // Faculty of Law (4P94+2RC)
   AUD: { latitude: 5.116737, longitude: -1.293891, radiusM: 150 },   // University Main Auditorium (4P84+MCX)
   SMS: { latitude: 5.120277, longitude: -1.293839, radiusM: 150 },   // School of Medical Sciences
-  // CRT: the coordinates given were 5.5 km off campus; it stays on the campus-wide area until checked.
+  CRT: { latitude: 5.117780, longitude: -1.285295, radiusM: 150 },   // Cafe Roof Top
 };
 
 /**
@@ -116,7 +116,7 @@ const UCC_LOCATIONS = {
  */
 async function applyBuildingLocations(db, name) {
   if (name !== 'ucc') return 0;
-  const VERSION = 'ucc-locations-1';
+  const VERSION = 'ucc-locations-2'; // bump when the list changes, so new points are applied
   if (await db.get("SELECT 1 FROM app_meta WHERE key = 'building_locations' AND value = ?", [VERSION])) return 0;
   let n = 0;
   for (const [code, p] of Object.entries(UCC_LOCATIONS)) {
