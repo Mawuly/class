@@ -295,7 +295,7 @@ async function loadRooms() {
   try {
     const data = await api(`/public/rooms?date=${encodeURIComponent(date)}`);
     state.rooms = data.rooms;
-    state.rules = { open: data.open, close: data.close, maxHours: data.maxHours };
+    state.rules = { open: data.open, close: data.close, maxHours: data.maxHours, studentsNeedApproval: data.studentsNeedApproval };
     fillTimeOptions();
     applyTime();
   } catch (err) {
@@ -413,9 +413,12 @@ function requestRoom(room, period) {
   selectedRoom = room;
   selectedSlot = { ...period };
   const staff = state.user.role !== 'student';
-  $('booking-title').textContent = `${staff ? 'Book' : 'Request'} ${room.code}`;
+  // Students' bookings are confirmed straight away unless the office has chosen manual approval.
+  const waits = !staff && state.rules.studentsNeedApproval;
+  $('booking-title').textContent = `${waits ? 'Request' : 'Book'} ${room.code}`;
   $('booking-slot').textContent = `${room.name} · ${dayLabel(period.date || state.date)} · ${clock(period.start)} – ${clock(period.end)}`;
-  $('booking-note').textContent = staff ? 'Confirmed straight away.' : 'Approval required.';
+  $('booking-note').textContent = waits ? 'Approval required.' : 'Confirmed straight away. Check in at the door when it starts.';
+  $('booking-form').querySelector('[type="submit"]').textContent = waits ? 'Send request' : 'Book room';
   $('booking-error').textContent = '';
   $('purpose').value = '';
   $('course-code').value = '';

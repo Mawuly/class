@@ -126,5 +126,8 @@ module.exports = {
     // "required": check-in is refused unless the phone is at the room's building.
     // "flag": check-in always works and far-away check-ins are only flagged. Set in /admin → Settings.
     checkInLocation: 'required',
+    // "auto": student bookings are approved straight away, like staff bookings.
+    // "manual": they wait for the timetable office. Set in /admin → Settings.
+    studentApproval: 'auto',
   },
 };

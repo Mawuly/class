@@ -18,7 +18,7 @@ async function resetDb() {
                        RESTART IDENTITY CASCADE`);
   await seedReference(db);
   // Booking window back to the defaults (a test may have changed it on /admin → Settings).
-  await db.run(`INSERT INTO app_meta (key, value) VALUES ('booking_open', '06:30'), ('booking_close', '20:30'), ('booking_max_hours', '4'), ('checkin_location', 'required')
+  await db.run(`INSERT INTO app_meta (key, value) VALUES ('booking_open', '06:30'), ('booking_close', '20:30'), ('booking_max_hours', '4'), ('checkin_location', 'required'), ('student_approval', 'manual')
                 ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
   await require('../src/services/settings').load(db);
 }

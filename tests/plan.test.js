@@ -116,7 +116,7 @@ describe('booking window and whole hours', () => {
   });
 
   test('defaults: 06:30–20:30, starts every half hour, whole hours up to 4', async () => {
-    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4, checkInLocation: 'required' });
+    assert.deepEqual((await admin.get('/api/admin/settings')).body.settings, { open: '06:30', close: '20:30', maxHours: 4, checkInLocation: 'required', studentApproval: 'manual' });
     const meta = (await lecturer.get('/api/rooms/meta')).body.rules;
     assert.deepEqual([meta.open, meta.close, meta.maxHours], ['06:30', '20:30', 4]);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '10:30')).body.error, /whole hours/);
@@ -126,7 +126,7 @@ describe('booking window and whole hours', () => {
 
   test('the office changes the window; it applies at once and is logged', async () => {
     const res = await admin.patch('/api/admin/settings').send({ open: '08:00', close: '18:00', maxHours: 2 });
-    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2, checkInLocation: 'required' });
+    assert.deepEqual(res.body.settings, { open: '08:00', close: '18:00', maxHours: 2, checkInLocation: 'required', studentApproval: 'manual' });
     assert.match((await book(lecturer, 'LT-1', date, '07:00', '08:00')).body.error, /between 08:00 and 18:00/);
     assert.match((await book(lecturer, 'LT-1', date, '09:00', '12:00')).body.error, /at most 2 hours/);
     assert.equal((await book(lecturer, 'LT-1', date, '16:00', '18:00')).status, 201);
@@ -242,5 +242,28 @@ describe('directions to buildings', () => {
     await book(a, 'LIB-S1', tomorrow(), '10:00', '11:00', { category: 'meeting', attendees: 4 });
     const mine = (await a.get('/api/bookings/mine')).body.bookings;
     assert.match(mine[0].directions, /destination=5.11%2C-1.29/);
+  });
+});
+
+
+describe('student requests approved automatically', () => {
+  beforeEach(resetDb);
+
+  test('with "auto", a student booking is confirmed at once; the office can switch back to manual', async () => {
+    const admin = await signedIn('boss@campus.test');
+    const student = await signedIn('kofi@campus.test');
+    await admin.patch('/api/admin/settings').send({ studentApproval: 'auto' });
+    const res = await book(student, 'LIB-S1', tomorrow(), '10:00', '11:00', { category: 'study', attendees: 3 });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.booking.status, 'approved');
+    assert.equal((await admin.get('/api/admin/pending-counts')).body.bookings, 0, 'nothing waits in Approvals');
+    assert.equal((await agent().get(`/api/public/rooms?date=${tomorrow()}`)).body.studentsNeedApproval, false);
+    // The usual limits still hold.
+    assert.equal((await book(student, 'LT-1', tomorrow(), '12:00', '13:00', { category: 'study' })).status, 403, 'staff-only room');
+    assert.equal((await book(student, 'LIB-S2', tomorrow(), '12:00', '13:00', { category: 'lecture' })).status, 403, 'staff category');
+    await admin.patch('/api/admin/settings').send({ studentApproval: 'manual' });
+    const later = await book(student, 'LIB-S2', tomorrow(), '14:00', '15:00', { category: 'study', attendees: 3 });
+    assert.equal(later.body.booking.status, 'pending');
+    assert.match((await admin.patch('/api/admin/settings').send({ studentApproval: 'never' })).body.error, /auto" or "manual/);
   });
 });

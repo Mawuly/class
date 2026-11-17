@@ -271,3 +271,12 @@ Room cards, **My bookings** and the door page have a **Directions** link: Google
 from wherever the person is (the Maps app on phones; no API key needed). For a building with its own
 location (`/admin` → Rooms → Edit building) the directions go to that exact point; for a building still
 on the campus-wide area, Google Maps is asked for "<building name>, University of Cape Coast".
+
+
+## Student requests: automatic or manual approval
+
+By default a student's booking is **approved straight away**, like a lecturer's. Students can still only
+book rooms open to everyone, for study, meetings or events, and a booking nobody checks in to is
+released after the grace period, so empty rooms don't stay blocked. In `/admin` → **Settings** →
+Student requests the office can switch to **wait for the timetable office**: student bookings then
+arrive in Approvals as before.

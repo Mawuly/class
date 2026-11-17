@@ -239,7 +239,8 @@ async function door(rawCode, user) {
       const ends = [];
       // Bookings last whole hours.
       for (let e = startMin + 60; e <= limit && ends.length < 8; e += 60) ends.push(t.fromMinutes(e));
-      if (ends.length) book = { date, start, ends, needsApproval: user.role === 'student' };
+      if (ends.length) book = { date, start, ends, needsApproval: user.role === 'student' && rules.studentApproval === 'manual',
+        studentCategories: user.role === 'student' };
     }
   }
 

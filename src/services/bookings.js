@@ -123,7 +123,9 @@ async function prepare(user, input) {
   if (d.attendees > room.capacity) {
     throw new AppError(400, `${room.code} holds ${room.capacity} people; you entered ${d.attendees}`);
   }
-  return { d, room, status: user.role === 'student' ? 'pending' : 'approved' };
+  // Students wait for the timetable office only when it has chosen manual approval (/admin → Settings).
+  const waits = user.role === 'student' && rules.studentApproval === 'manual';
+  return { d, room, status: waits ? 'pending' : 'approved' };
 }
 
 async function create(user, input, { ip } = {}) {

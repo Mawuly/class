@@ -126,7 +126,7 @@ function mineCard(d) {
 function bookCard(d) {
   const b = d.book;
   if (!b || d.mine?.state === 'open' || d.mine?.state === 'checked-in') return '';
-  const cats = b.needsApproval ? STUDENT_CATEGORIES : Object.keys(CATEGORIES);
+  const cats = b.studentCategories ? STUDENT_CATEGORIES : Object.keys(CATEGORIES);
   const end = h('select', { name: 'end', 'aria-label': 'Until' },
     b.ends.map((e, i) => h('option', { value: e, selected: i === Math.min(1, b.ends.length - 1) }, `${e} (${duration(b.start, e)})`)));
   const submit = h('button', { class: 'button button--primary', type: 'submit' }, b.needsApproval ? 'Send request' : 'Book');

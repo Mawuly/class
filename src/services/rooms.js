@@ -249,6 +249,8 @@ async function publicRooms({ date } = {}, at = new Date()) {
     open: rules.open,
     close: rules.close,
     maxHours: rules.maxHours,
+    // Whether student requests wait for the timetable office (the page words its buttons from this).
+    studentsNeedApproval: rules.studentApproval === 'manual',
     rooms: rooms.map((r) => {
       const periods = freePeriods(byRoom.get(r.id) || [], from, rules.close);
       const { building_id: _b, ...room } = shapeRoom(r);

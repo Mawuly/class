@@ -157,6 +157,14 @@
       <p class="settings-form__summary" data-settings-summary></p>
       <p class="field__hint">Applies to new bookings, the free-room search, the day board and door pages straight away.
         Bookings already made outside the new times are kept. Temporary closures are on the Rooms page.</p>
+      <h2 class="panel__title">Student requests</h2>
+      <label class="field"><span class="field__label">When a student books a room</span>
+        <select name="studentApproval">
+          <option value="auto">Approve it straight away</option>
+          <option value="manual">Wait for the timetable office to approve it</option>
+        </select></label>
+      <p class="field__hint">Students can still only book rooms open to everyone, for study, meetings or events. Bookings nobody
+        checks in to are released after the grace period either way. Requests already waiting stay in Approvals.</p>
       <h2 class="panel__title">Check-in location</h2>
       <label class="field"><span class="field__label">When a phone isn't at the room's building</span>
         <select name="checkInLocation">
