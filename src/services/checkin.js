@@ -220,6 +220,7 @@ async function door(rawCode, user) {
       id: room.id, code: room.code, name: room.name, type: room.type, capacity: room.capacity, floor: room.floor,
       facilities: Array.isArray(room.facilities) ? room.facilities : [],
       buildingCode: room.building_code, buildingName: room.building_name,
+      directions: geo.directionsUrl({ name: room.building_name, latitude: room.latitude, longitude: room.longitude, radius_m: room.radius_m }),
     },
     date, time, isOpen, open: rules.open, close: rules.close,
     current: shape(current) || null,

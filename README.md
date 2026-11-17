@@ -259,3 +259,11 @@ To start with, every UCC building has a **campus-wide area**: the university's c
 (5°06′57″N, 1°17′27″W) with a 3 km radius. That flags check-ins from town, home or another city, but
 not from a hostel on campus. Replace it building by building (the Rooms page marks which still use
 it); buildings you set yourself are never overwritten.
+
+
+## Directions to buildings
+
+Room cards, **My bookings** and the door page have a **Directions** link: Google Maps walking directions
+from wherever the person is (the Maps app on phones; no API key needed). For a building with its own
+location (`/admin` → Rooms → Edit building) the directions go to that exact point; for a building still
+on the campus-wide area, Google Maps is asked for "<building name>, University of Cape Coast".

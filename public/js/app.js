@@ -347,7 +347,8 @@ function renderNext(bookings) {
     h('p', { class: 'next__meta' },
       h('span', { class: 'mono' }, countdown),
       ` · ${next.room_name}, ${next.building_code}`,
-      next.status === 'pending' ? h('span', { class: 'tag tag--pending' }, 'Awaiting approval') : ''),
+      next.status === 'pending' ? h('span', { class: 'tag tag--pending' }, 'Awaiting approval') : '',
+      next.directions ? h('a', { class: 'next__directions', href: next.directions, target: '_blank', rel: 'noopener' }, ' · Directions ↗') : ''),
     checkInLine(next, state.meta.rules, { onDone: refreshAfterChange }),
   );
 }

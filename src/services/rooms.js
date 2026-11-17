@@ -4,16 +4,24 @@ const db = require('../db');
 const { booking: rules } = require('../config');
 const { AppError } = require('../utils/errors');
 const t = require('../utils/time');
+const { directionsUrl } = require('../utils/geo');
 
 const TYPES = ['lecture_hall', 'lab', 'seminar', 'study', 'meeting'];
 const HOLDING = "('pending', 'approved')";
 
 const ROOM_COLUMNS = `r.id, r.code, r.name, r.type, r.capacity, r.floor, r.facilities, r.bookable_by,
-  r.building_id, bl.code AS building_code, bl.name AS building_name`;
+  r.building_id, bl.code AS building_code, bl.name AS building_name,
+  bl.latitude AS building_latitude, bl.longitude AS building_longitude, bl.radius_m AS building_radius_m`;
 const ROOM_FROM = 'rooms r JOIN buildings bl ON bl.id = r.building_id';
 
+/** A room as the API returns it: facilities as a list, directions instead of raw coordinates. */
 function shapeRoom(r) {
-  return { ...r, facilities: Array.isArray(r.facilities) ? r.facilities : [] };
+  const { building_latitude: latitude, building_longitude: longitude, building_radius_m: radius, ...rest } = r;
+  return {
+    ...rest,
+    facilities: Array.isArray(r.facilities) ? r.facilities : [],
+    directions: directionsUrl({ name: r.building_name, latitude, longitude, radius_m: radius }),
+  };
 }
 
 function parseId(id) {

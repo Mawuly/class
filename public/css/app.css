@@ -1384,3 +1384,5 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; jus
 .flagged { margin-top: 18px; }
 .flagged__summary { margin: 4px 0 10px; font-size: 14px; color: var(--text-strong); }
 .flagged__note { margin-bottom: 10px; font-size: 13px; color: var(--text-muted); }
+.door__directions { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--text-strong); text-underline-offset: 3px; }
+.next__directions { color: var(--text-strong); text-underline-offset: 3px; }

@@ -6,6 +6,7 @@ const t = require('../utils/time');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const { blockClashes } = require('./roomBlocks');
+const { directionsUrl } = require('../utils/geo');
 
 const CATEGORIES = ['lecture', 'tutorial', 'lab', 'exam', 'meeting', 'study', 'event'];
 const STUDENT_CATEGORIES = ['study', 'meeting', 'event'];
@@ -14,7 +15,7 @@ const HOLDING = "('pending', 'approved')";
 const EXCLUSION_VIOLATION = '23P01'; // Postgres error code raised by the no-overlap constraints
 
 const BOOKING_COLUMNS = `
-  b.id, b.room_id, r.code AS room_code, r.name AS room_name, bl.code AS building_code,
+  b.id, b.room_id, r.code AS room_code, r.name AS room_name, bl.code AS building_code, bl.name AS building_name,
   b.user_id, b.title, b.category, b.course_code, b.date, b.start_time, b.end_time,
   b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at, b.checked_in_at, b.released_at,
   b.supervisor, b.checked_out_at`;
@@ -305,7 +306,15 @@ async function cancelSeries(user, seriesId, { ip } = {}) {
   });
 }
 
+/** Each of my bookings with Google Maps walking directions to its building. */
 async function listMine(user, scope = 'upcoming') {
+  const rows = await listMineRows(user, scope);
+  const places = await db.all('SELECT code, name, latitude, longitude, radius_m FROM buildings');
+  const byCode = new Map(places.map((p) => [p.code, p]));
+  return rows.map((b) => ({ ...b, directions: directionsUrl(byCode.get(b.building_code) || { name: b.building_name }) }));
+}
+
+async function listMineRows(user, scope = 'upcoming') {
   const today = t.localDate();
   const now = t.localTime();
   const upcoming = scope !== 'past';

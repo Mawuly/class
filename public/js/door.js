@@ -198,6 +198,8 @@ function render(d) {
     h('header', { class: 'door__head' },
       h('h1', { class: 'door__code mono' }, r.code),
       h('p', { class: 'door__where' }, `${r.name} · ${r.buildingName} · ${r.capacity} seats`),
+      r.directions ? h('a', { class: 'door__directions', href: r.directions, target: '_blank', rel: 'noopener',
+        'aria-label': `Walking directions to ${r.buildingName} (opens Google Maps)` }, 'Directions to this building ↗') : '',
       h('p', { class: 'door__doorcode mono' }, `Door code ${formatCode(code)}`)),
     flash ? h('p', { class: 'door__flash', role: 'status' }, flash) : '',
     h('p', { class: 'alert', 'data-error': '', hidden: true }),

@@ -219,3 +219,28 @@ describe('booking details, check-out and the public room list', () => {
     assert.equal(res.body.request, null);
   });
 });
+
+describe('directions to buildings', () => {
+  beforeEach(resetDb);
+
+  test('a building with its own point gets exact directions; otherwise Google Maps looks it up by name', async () => {
+    const { directionsUrl } = require('../src/utils/geo');
+    const exact = new URL(directionsUrl({ name: 'NLT', latitude: 5.1101, longitude: -1.2952, radius_m: 150 }));
+    assert.equal(exact.origin + exact.pathname, 'https://www.google.com/maps/dir/');
+    assert.equal(exact.searchParams.get('destination'), '5.1101,-1.2952');
+    assert.equal(exact.searchParams.get('travelmode'), 'walking');
+    const campus = new URL(directionsUrl({ name: 'New Lecture Theatre', latitude: 5.115833, longitude: -1.290833, radius_m: 3000 }));
+    assert.equal(campus.searchParams.get('destination'), 'New Lecture Theatre, University of Cape Coast, Ghana');
+    assert.match(directionsUrl({ name: 'Science Block' }), /destination=Science\+Block/);
+
+    await db.run("UPDATE buildings SET latitude = 5.11, longitude = -1.29, radius_m = 120 WHERE code = 'LIB'");
+    const rooms = (await agent().get(`/api/public/rooms?date=${tomorrow()}`)).body.rooms;
+    assert.match(rooms.find((r) => r.code === 'LIB-S1').directions, /destination=5.11%2C-1.29/);
+    assert.match(rooms.find((r) => r.code === 'SCB-104').directions, /destination=Science\+Block/);
+    assert.ok(!('building_latitude' in rooms[0]), 'coordinates are not sent as such');
+    const a = await signedIn('ama@campus.test', 'lecturer');
+    await book(a, 'LIB-S1', tomorrow(), '10:00', '11:00', { category: 'meeting', attendees: 4 });
+    const mine = (await a.get('/api/bookings/mine')).body.bookings;
+    assert.match(mine[0].directions, /destination=5.11%2C-1.29/);
+  });
+});

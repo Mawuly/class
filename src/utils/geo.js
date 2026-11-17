@@ -39,4 +39,19 @@ function label(building, position) {
   return { state: distance <= allowed ? 'near' : 'far', distance, accuracy: pos.accuracy };
 }
 
-module.exports = { distanceM, cleanPosition, label, MAX_ACCURACY_M };
+// A building has its own point when the office set one; the campus-wide area (radius ≥ 2 km) is
+// only the campus centre, so for those Google Maps is asked to find the building by name.
+const PRECISE_RADIUS_M = 2000;
+
+/**
+ * Google Maps walking directions from wherever the person is to a building. Opens the Maps app on
+ * phones. Needs no API key.
+ */
+function directionsUrl({ name, latitude, longitude, radius_m: radius }) {
+  const params = new URLSearchParams({ api: '1', travelmode: 'walking' });
+  const precise = latitude != null && longitude != null && radius < PRECISE_RADIUS_M;
+  params.set('destination', precise ? `${latitude},${longitude}` : `${name}, University of Cape Coast, Ghana`);
+  return `https://www.google.com/maps/dir/?${params}`;
+}
+
+module.exports = { distanceM, cleanPosition, label, directionsUrl, MAX_ACCURACY_M };

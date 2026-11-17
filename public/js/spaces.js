@@ -16,6 +16,16 @@ const button = (text, cls, fn) => {
   b.addEventListener('click', fn);
   return b;
 };
+/** "Directions": Google Maps walking directions to the room's building, in a new tab (the Maps app on phones). */
+function directionsLink(url, place) {
+  const a = el('a', 'directions-link', 'Directions');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.setAttribute('aria-label', `Walking directions to ${place} (opens Google Maps)`);
+  return a;
+}
+
 function optionEl(value, label) { const o = el('option', '', label); o.value = value; return o; }
 function toast(message) {
   $('toast').textContent = message;
@@ -370,6 +380,7 @@ function roomCard(r) {
   const book = button(label, '', () => requestRoom(r, slot));
   book.disabled = !slot || staffOnly;
   card.append(book);
+  if (r.directions) card.append(directionsLink(r.directions, `${r.code}, ${r.building_name}`));
   return card;
 }
 
@@ -510,6 +521,7 @@ function bookingRecord(b) {
   actions.append(badge(b.status));
   if (stateName === 'open') actions.append(button('Check in', 'primary', () => openCheckIn(b)));
   if (stateName === 'checked-in') actions.append(button('Check out', 'primary', () => checkOutBooking(b)));
+  if (b.directions && HOLDS.includes(b.status)) actions.append(directionsLink(b.directions, `${b.room_code}, ${b.building_name}`));
   if (HOLDS.includes(b.status) && stateName !== 'checked-out') {
     actions.append(button('Cancel', 'text-button', () => cancelBooking(b)));
   }
