@@ -18,8 +18,8 @@ const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
 //   9: room_blocks (temporary closures) and the triggers that keep them apart from bookings
 //   10: booking window in app_meta   11: bookings.supervisor   12: bookings.checked_out_at
 //   13: users.google_sub (Continue with Google)   14: building locations, check-in location label
-//   15: check-in radius up to 5 km (campus-wide area)
-const SCHEMA_VERSION = 15;
+//   15: check-in radius up to 5 km (campus-wide area)   16: timetable lectures, class check-in
+const SCHEMA_VERSION = 16;
 
 let ready = null;
 

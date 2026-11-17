@@ -381,6 +381,26 @@ ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS checkin_accuracy_m integer;
 ALTER TABLE buildings DROP CONSTRAINT IF EXISTS buildings_radius_m_check;
 ALTER TABLE buildings ADD CONSTRAINT buildings_radius_m_check CHECK (radius_m BETWEEN 30 AND 5000);
 
+-- The official timetable (schema version 16). Lectures imported by the timetable office are weekly
+-- bookings of kind 'timetable', owned by the office. Anyone signed in at the building can check a
+-- class in (checked_in_by records who); with nobody checked in, the room is released as usual.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'booking' CHECK (kind IN ('booking', 'timetable'));
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS lecturer text;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_by integer REFERENCES users(id);
+ALTER TABLE booking_series ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'booking' CHECK (kind IN ('booking', 'timetable'));
+ALTER TABLE booking_series ADD COLUMN IF NOT EXISTS title text;
+ALTER TABLE booking_series ADD COLUMN IF NOT EXISTS course_code text;
+ALTER TABLE booking_series ADD COLUMN IF NOT EXISTS lecturer text;
+ALTER TABLE booking_series ADD COLUMN IF NOT EXISTS label text;   -- e.g. "B.Com Management Level 300"
+-- Every timetable lecture belongs to the office's account, and different programmes' lectures run at
+-- the same time, so "one person can't be in two rooms at once" applies to ordinary bookings only.
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_user_overlap;
+ALTER TABLE bookings ADD CONSTRAINT bookings_no_user_overlap EXCLUDE USING gist (
+  user_id WITH =,
+  tsrange(date + start_time, date + end_time) WITH &&
+) WHERE (status IN ('pending', 'approved') AND kind = 'booking');
+CREATE INDEX IF NOT EXISTS idx_bookings_kind ON bookings (kind) WHERE kind <> 'booking';
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

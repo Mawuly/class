@@ -71,6 +71,8 @@ function describe(e) {
     'booking.check_in_refused': [`was refused check-in to ${owner || 'their '}booking for ${booking}`,
       d.location === 'far' ? `⚠ ${d.distance_m >= 1000 ? `${(d.distance_m / 1000).toFixed(1)} km` : `${d.distance_m} m`} from the building`
         : d.accuracy_m ? `location too imprecise (±${d.accuracy_m} m)` : 'location not shared'],
+    'timetable.import': [`imported the timetable "${d.label}"`, `${d.classes} classes, ${d.lectures} lectures ${d.from ? `${day(d.from)} – ${day(d.to)}` : ''}`.trim()],
+    'timetable.remove': [`removed the timetable "${d.label}"`, `${d.cancelled} lectures cancelled`],
     'room.new_door_code': [`replaced the door code of ${e.target_room || 'a room'}`, 'the old sign stopped working'],
     'booking.approve': [`approved ${owner}request for ${booking}`],
     'booking.reject': [`rejected ${owner}request for ${booking}`, d.reason ? `“${d.reason}”` : ''],

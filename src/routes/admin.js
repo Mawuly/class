@@ -16,6 +16,7 @@ const db = require('../db');
 const checkin = require('../services/checkin');
 const roomBlocks = require('../services/roomBlocks');
 const settings = require('../services/settings');
+const timetable = require('../services/timetable');
 const { baseUrl } = require('./calendar');
 
 const router = express.Router();
@@ -143,6 +144,17 @@ router.post('/room-blocks', async (req, res) => {
 });
 router.delete('/room-blocks/:id', async (req, res) => {
   res.json({ block: await roomBlocks.remove(req.user, parseId(req.params.id, 'Closure'), { ip: req.ip }) });
+});
+
+/* ---------- Official timetable (weekly lectures for a semester) ------------------------- */
+
+router.get('/timetables', async (req, res) => res.json({ classes: await timetable.list() }));
+router.post('/timetables/preview', async (req, res) => res.json(await timetable.preview(req.body ?? {})));
+router.post('/timetables', async (req, res) => {
+  res.status(201).json(await timetable.importTimetable(req.user, req.body ?? {}, { ip: req.ip }));
+});
+router.post('/timetables/remove', async (req, res) => {
+  res.json(await timetable.remove(req.user, String(req.body?.label ?? ''), { ip: req.ip }));
 });
 
 /* ---------- Booking window (Settings) --------------------------------------------------- */

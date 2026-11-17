@@ -502,7 +502,7 @@ async function enterApp(user) {
 const PAGES = { '#/board': 'board' };
 const APP_VIEWS = ['dashboard', 'board', 'week'];
 // Old links to admin pages on the main site now open the timetable office portal.
-const MOVED_TO_PORTAL = ['#/approvals', '#/rooms', '#/people', '#/stats', '#/audit', '#/settings'];
+const MOVED_TO_PORTAL = ['#/approvals', '#/rooms', '#/people', '#/stats', '#/audit', '#/timetable', '#/settings'];
 
 /** Pages for students and lecturers: "#/" dashboard, "#/board" day board, "#/room/12" a room's week. */
 async function route() {

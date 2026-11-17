@@ -68,13 +68,34 @@ async function doCheckIn(button) {
   try {
     button.textContent = 'Checking in…';
     const { booking, location } = await checkIn(code, 'qr');
-    flash = `You're checked in. ${booking.room_code} is yours until ${booking.end_time}. ${locationNote(location)}`.trim();
+    const res = { booking, location };
+    flash = (res.booking.kind === 'timetable'
+      ? `Class checked in: ${booking.course_code || booking.title} keeps ${booking.room_code} until ${booking.end_time}. ${locationNote(location)}`
+      : `You're checked in. ${booking.room_code} is yours until ${booking.end_time}. ${locationNote(location)}`).trim();
     await load();
   } catch (err) {
     button.disabled = false;
     button.textContent = 'Check in';
     showError(box, err.message);
   }
+}
+
+/** A timetable class on now: anyone at the room can check it in, so the room isn't released. */
+function classCard(d) {
+  const c = d.class;
+  if (!c) return '';
+  const head = h('p', { class: 'door-card__label mono' }, 'Class on now');
+  const title = h('p', { class: 'door-card__title' }, c.courseCode ? `${c.courseCode} · ${c.title}` : c.title, ' · ',
+    h('span', { class: 'mono' }, `${c.start}–${c.end}`));
+  const who = c.lecturer ? h('p', { class: 'muted' }, c.lecturer) : '';
+  if (c.state === 'checked-in') {
+    return h('section', { class: 'door-card door-card--done panel' }, head, title, who,
+      h('p', { class: 'door-card__ok' }, h('span', { 'aria-hidden': 'true' }, '✓ '), 'This class is checked in.'));
+  }
+  const button = h('button', { class: 'button button--primary door__big', type: 'button' }, 'Check in for this class');
+  button.addEventListener('click', () => doCheckIn(button));
+  return h('section', { class: 'door-card door-card--action panel' }, head, title, who, button,
+    h('p', { class: 'muted' }, `Course rep, lecturer or student: check the class in by ${c.deadline}, or the room is released for others.`));
 }
 
 function mineCard(d) {
@@ -206,6 +227,7 @@ function render(d) {
     h('p', { class: 'alert', 'data-error': '', hidden: true }),
     statusCard(d),
     mineCard(d),
+    classCard(d),
     bookCard(d),
     laterList(d),
     h('p', { class: 'door__foot' }, h('a', { href: '/' }, 'Open the main site'), ' · ',

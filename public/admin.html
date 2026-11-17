@@ -28,6 +28,7 @@
       <a class="topbar__link" href="#/people" data-nav="people">People</a>
       <a class="topbar__link" href="#/stats" data-nav="stats">Statistics</a>
       <a class="topbar__link" href="#/audit" data-nav="audit">Audit log</a>
+      <a class="topbar__link" href="#/timetable" data-nav="timetable">Timetable</a>
       <a class="topbar__link" href="#/settings" data-nav="settings">Settings</a>
       <a class="topbar__link topbar__link--portal" href="/">Main site</a>
       <span class="topbar__who" data-user-name></span>
@@ -136,6 +137,38 @@
     <p class="alert" data-error hidden></p>
     <div data-closures></div>
     <div class="rooms-table" data-rooms-table></div>
+  </main>
+
+  <!-- Timetable: import a programme's weekly lectures for a semester ---------------------- -->
+  <main class="rooms-view timetable-view" data-view="timetable" hidden>
+    <div class="page-bar">
+      <div>
+        <h1 class="serif page-bar__title">Timetable</h1>
+        <p class="mono page-bar__summary">Weekly lectures for a semester · shown as booked, released when nobody checks in</p>
+      </div>
+    </div>
+    <p class="alert" data-error hidden></p>
+    <form class="form panel tt-form" data-form="timetable" novalidate>
+      <h2 class="panel__title">Import a timetable</h2>
+      <div class="field-row field-row--3">
+        <label class="field"><span class="field__label">Name</span><input name="label" maxlength="80" placeholder="B.Com Management Level 300" required></label>
+        <label class="field"><span class="field__label">First teaching day</span><input name="from" type="date" class="mono" required></label>
+        <label class="field"><span class="field__label">Last teaching day</span><input name="to" type="date" class="mono" required></label>
+      </div>
+      <label class="field"><span class="field__label">Classes, one per line (paste from a spreadsheet, or choose a .csv file)</span>
+        <textarea name="table" rows="9" class="mono" spellcheck="false" placeholder="Day,Start,End,Code,Title,Room,Lecturer"></textarea>
+        <span class="field__hint">Columns: Day, Start, End (or one Time column like "9:30 AM – 11:30 AM"), Code, Title, Room, Lecturer.
+          Rooms as on the timetable work too: "NLT 10", "SWLT 17", "CALC 2", "LLT". Leave Day empty to repeat the day above.
+          Classes without a room are left out. Clashing weeks are skipped and listed.</span></label>
+      <div class="sheet__actions">
+        <button class="button button--primary" type="submit">Preview</button>
+        <label class="button button--secondary tt-file">Choose a .csv file<input type="file" accept=".csv,text/csv,text/plain" data-timetable-file hidden></label>
+        <button class="link-button" type="button" data-timetable-example>Fill in an example</button>
+      </div>
+    </form>
+    <div data-timetable-preview></div>
+    <h2 class="panel__title tt-list-title">Imported timetables</h2>
+    <div data-timetable-list></div>
   </main>
 
   <!-- Settings: the booking window ------------------------------------------------------ -->

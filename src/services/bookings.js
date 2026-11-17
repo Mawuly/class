@@ -18,7 +18,7 @@ const BOOKING_COLUMNS = `
   b.id, b.room_id, r.code AS room_code, r.name AS room_name, bl.code AS building_code, bl.name AS building_name,
   b.user_id, b.title, b.category, b.course_code, b.date, b.start_time, b.end_time,
   b.attendees, b.notes, b.status, b.series_id, b.decision_reason, b.created_at, b.checked_in_at, b.released_at,
-  b.supervisor, b.checked_out_at`;
+  b.supervisor, b.checked_out_at, b.kind, b.lecturer`;
 const BOOKING_FROM = 'bookings b JOIN rooms r ON r.id = b.room_id JOIN buildings bl ON bl.id = r.building_id';
 
 function str(v, max) {
@@ -53,7 +53,7 @@ async function userClashes(exec, userId, date, start, end) {
   return exec.all(
     `SELECT b.id, b.title, b.start_time, b.end_time, r.code AS room_code
      FROM bookings b JOIN rooms r ON r.id = b.room_id
-     WHERE b.user_id = ? AND b.date = ? AND b.status IN ${HOLDING} AND b.start_time < ? AND b.end_time > ?
+     WHERE b.user_id = ? AND b.date = ? AND b.status IN ${HOLDING} AND b.kind = 'booking' AND b.start_time < ? AND b.end_time > ?
      ORDER BY b.start_time`,
     [userId, date, end, start],
   );

@@ -45,14 +45,18 @@ async function releaseNoShows(now = new Date()) {
        FROM rooms r
        WHERE r.id = b.room_id AND b.status = 'approved' AND b.checked_in_at IS NULL
          AND b.date = ? AND b.start_time <= ? AND b.end_time > ? AND b.updated_at <= ?
-       RETURNING b.id, b.user_id, b.date, b.start_time, b.end_time, r.code AS room_code`,
+       RETURNING b.id, b.user_id, b.kind, b.date, b.start_time, b.end_time, r.code AS room_code`,
       [now, now, today, cutoff, t.localTime(now), graceAgo],
     );
     for (const b of released) {
       const deadline = t.fromMinutes(t.toMinutes(b.start_time) + rules.checkInGraceMinutes);
-      await notify(b.user_id, `Your booking for ${b.room_code} on ${dayLabel(b.date)}, ${b.start_time}–${b.end_time} `
-        + `was released because nobody checked in by ${deadline}. The room is free for others now.`, x);
-      await audit({ action: 'booking.release', entity: 'booking', entityId: b.id, details: { by: deadline } }, x);
+      // A timetable class belongs to the office: it is logged, not sent to the office as a notice.
+      if (b.kind !== 'timetable') {
+        await notify(b.user_id, `Your booking for ${b.room_code} on ${dayLabel(b.date)}, ${b.start_time}–${b.end_time} `
+          + `was released because nobody checked in by ${deadline}. The room is free for others now.`, x);
+      }
+      await audit({ action: 'booking.release', entity: 'booking', entityId: b.id,
+        details: { by: deadline, ...(b.kind === 'timetable' ? { timetable: true } : {}) } }, x);
     }
     return released;
   });
@@ -117,7 +121,8 @@ async function roomByCode(raw) {
 }
 
 /**
- * Checks the signed-in person in to their booking in the room whose door code they gave.
+ * Checks the signed-in person in to their booking in the room whose door code they gave, or, for a
+ * timetable class (booked by the timetable office), anyone at the room checks the class in.
  * Works from 10 minutes before the start until the grace period ends.
  */
 async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}) {
@@ -127,13 +132,16 @@ async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}
   const today = t.localDate(now);
   const time = t.localTime(now);
   const early = t.localTime(new Date(now.getTime() + rules.checkInEarlyMinutes * 60_000));
-  const rows = await db.all(
-    `SELECT id, title, date, start_time, end_time, status, checked_in_at FROM bookings
-     WHERE user_id = ? AND room_id = ? AND date = ? AND end_time > ? AND status IN ('pending', 'approved', 'released')
+  const all = await db.all(
+    `SELECT id, user_id, kind, title, course_code, date, start_time, end_time, status, checked_in_at FROM bookings
+     WHERE room_id = ? AND date = ? AND end_time > ? AND status IN ('pending', 'approved', 'released')
+       AND (user_id = ? OR kind = 'timetable')
      ORDER BY start_time`,
-    [user.id, room.id, today, time],
+    [room.id, today, time, user.id],
   );
-  const b = rows.find((r) => r.start_time <= early);
+  const rows = all.filter((r) => r.user_id === user.id);
+  // Your own booking first; otherwise the timetable class in the room now.
+  const b = rows.find((r) => r.start_time <= early) || all.find((r) => r.kind === 'timetable' && r.start_time <= early);
   if (!b) {
     const later = rows.find((r) => r.status !== 'released');
     throw new AppError(400, later
@@ -141,8 +149,10 @@ async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}
       : `You have no booking in ${room.code} right now.`);
   }
   const s = checkInState(b, now);
+  const forClass = b.kind === 'timetable' && b.user_id !== user.id;
+  const what = forClass ? `${b.course_code || b.title} in ${room.code}` : `your booking in ${room.code}`;
   if (s.state === 'released') {
-    throw new AppError(409, `Too late: your booking in ${room.code} was released because nobody checked in by ${s.deadline}.`);
+    throw new AppError(409, `Too late: ${what} was released because nobody checked in by ${s.deadline}.`);
   }
   if (s.state === 'not-approved') {
     throw new AppError(409, `Your request for ${room.code} at ${b.start_time} hasn't been approved yet.`);
@@ -163,19 +173,20 @@ async function checkIn(user, rawCode, { via = 'code', ip, position = null } = {}
 
   const updated = await db.tx(async (x) => {
     const row = await x.get(
-      `UPDATE bookings SET checked_in_at = ?, checkin_location = ?, checkin_distance_m = ?, checkin_accuracy_m = ?
+      `UPDATE bookings SET checked_in_at = ?, checkin_location = ?, checkin_distance_m = ?, checkin_accuracy_m = ?, checked_in_by = ?
        WHERE id = ? AND status = 'approved' AND checked_in_at IS NULL
-       RETURNING id, title, date, start_time, end_time, status, checked_in_at, checkin_location, checkin_distance_m`,
-      [now, where.state, where.distance, where.accuracy, b.id],
+       RETURNING id, kind, title, course_code, date, start_time, end_time, status, checked_in_at, checkin_location, checkin_distance_m`,
+      [now, where.state, where.distance, where.accuracy, user.id, b.id],
     );
     if (row) {
       await audit({ userId: user.id, action: 'booking.check_in', entity: 'booking', entityId: b.id,
-        details: { via, location: where.state, ...(where.distance != null ? { distance_m: where.distance } : {}) }, ip }, x);
+        details: { via, location: where.state, ...(where.distance != null ? { distance_m: where.distance } : {}),
+          ...(forClass ? { class: b.course_code || b.title } : {}) }, ip }, x);
     }
     return row;
   });
   if (!updated) throw new AppError(409, 'This booking changed while you were checking in. Please try again.');
-  return { booking: { ...updated, room_code: room.code }, alreadyCheckedIn: false, location: { state: where.state, distance: where.distance } };
+  return { booking: { ...updated, room_code: room.code }, forClass, alreadyCheckedIn: false, location: { state: where.state, distance: where.distance } };
 }
 
 /**
@@ -191,7 +202,7 @@ async function door(rawCode, user) {
   const time = t.localTime(now);
   const isOpen = time >= rules.open && time < rules.close;
   const rows = await db.all(
-    `SELECT id, user_id, title, course_code, category, start_time, end_time, status, checked_in_at FROM bookings
+    `SELECT id, user_id, kind, title, course_code, lecturer, category, start_time, end_time, status, checked_in_at FROM bookings
      WHERE room_id = ? AND date = ? AND end_time > ? AND status IN ${HOLDING} ORDER BY start_time`,
     [room.id, date, time],
   );
@@ -201,7 +212,8 @@ async function door(rawCode, user) {
     status: b.status,
     checkedIn: Boolean(b.checked_in_at),
     mine: Boolean(user && b.user_id === user.id),
-    ...(user ? { title: b.title, courseCode: b.course_code } : {}),
+    ...(user ? { title: b.title, courseCode: b.course_code, lecturer: b.lecturer } : {}),
+    timetable: b.kind === 'timetable',
     ...(b.status === 'approved' && !b.checked_in_at ? { checkInBy: checkInState({ ...b, date }, now).deadline } : {}),
   });
   const current = rows.find((b) => b.start_time <= time);
@@ -257,6 +269,13 @@ async function door(rawCode, user) {
     closures: blocks.filter((b) => b !== closedNow).map((b) => ({ start: b.start_time, end: b.end_time, reason: b.reason })),
     upcoming: rows.filter((b) => b !== current).slice(0, 5).map(shape),
     mine,
+    // A timetable class on now (or about to start) that anyone signed in here can check in.
+    class: (() => {
+      if (!user || (mine && ['open', 'checked-in'].includes(mine.state))) return null;
+      const c = rows.find((b) => b.kind === 'timetable' && b.user_id !== user.id && ['open', 'checked-in'].includes(checkInState({ ...b, date }, now).state));
+      return c ? { id: c.id, title: c.title, courseCode: c.course_code, lecturer: c.lecturer, start: c.start_time, end: c.end_time,
+        ...checkInState({ ...c, date }, now) } : null;
+    })(),
     book,
     signedIn: Boolean(user),
     checkIn: { earlyMinutes: rules.checkInEarlyMinutes, graceMinutes: rules.checkInGraceMinutes, release: rules.releaseNoShows,

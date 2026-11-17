@@ -280,3 +280,19 @@ book rooms open to everyone, for study, meetings or events, and a booking nobody
 released after the grace period, so empty rooms don't stay blocked. In `/admin` → **Settings** →
 Student requests the office can switch to **wait for the timetable office**: student bookings then
 arrive in Approvals as before.
+
+
+## The official timetable
+
+`/admin` → **Timetable** books a programme's weekly lectures for a semester. Paste the timetable (or
+choose a .csv file) with columns Day, Start, End (or one Time column), Code, Title, Room, Lecturer, give
+it a name and the first and last teaching days, **Preview**, then **Import**. Room names as timetables
+write them work ("NLT 10", "SWLT 17", "CALC 2", "LLT"). Classes without a room or with an unknown room
+are left out, and weeks that clash with an existing booking or closure are skipped; the preview lists
+both. `docs/timetables/bcom-management-level-300.csv` is an example.
+
+Imported lectures show as **booked** everywhere. At the door, **anyone signed in** (course rep, lecturer
+or student) can check a class in, subject to the location check. If nobody checks in within the grace
+period (15 minutes), the lecture is released and the room shows as **available**. Releases of
+timetable lectures are logged but not sent to the office as notices. **Remove remaining lectures**
+takes a timetable off.

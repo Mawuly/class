@@ -39,6 +39,8 @@ app.use(helmet({
 // Staff access requests carry a letter of up to 3 MB (about 4 MB as base64). Vercel caps request
 // bodies at 4.5 MB. Every other route keeps a small limit.
 app.use(['/api/access-requests', '/api/access'], express.json({ limit: '4400kb' }));
+// A pasted timetable can be a few hundred rows.
+app.use('/api/admin/timetables', express.json({ limit: '300kb' }));
 app.use(express.json({ limit: '20kb' }));
 app.use(cookieParser());
 
