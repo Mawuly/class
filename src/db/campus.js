@@ -93,6 +93,48 @@ async function applyCampusArea(db, name) {
   return rows.length;
 }
 
+// Each UCC building's own point, from the timetable office (Google Maps coordinates, or the
+// centre of the building's plus code where only that was given). Radius: how far away still
+// counts as "at the building" for the check-in location check; larger for big complexes.
+const UCC_LOCATIONS = {
+  NLT: { latitude: 5.122458, longitude: -1.295767, radiusM: 200 },   // New Lecture Theatre
+  SWLT: { latitude: 5.118101, longitude: -1.298188, radiusM: 200 },  // Sandwich Lecture Theatre (4P92+6P)
+  CALC: { latitude: 5.119437, longitude: -1.292063, radiusM: 200 },  // C. A. Ackah / Auditorium 900 (4P95+Q5)
+  CODE: { latitude: 5.122162, longitude: -1.294234, radiusM: 200 },  // College of Distance Education (4PC4+V86)
+  LT: { latitude: 5.116968, longitude: -1.293370, radiusM: 150 },    // Science Lecture Theatre
+  LLT: { latitude: 5.117079, longitude: -1.291442, radiusM: 150 },   // S. K. Adjepong (4P85+QCW)
+  GBLK: { latitude: 5.117964, longitude: -1.292815, radiusM: 150 },  // G-Block (4P84+XVQ)
+  LAW: { latitude: 5.117689, longitude: -1.292983, radiusM: 150 },   // Faculty of Law (4P94+2RC)
+  AUD: { latitude: 5.116737, longitude: -1.293891, radiusM: 150 },   // University Main Auditorium (4P84+MCX)
+  SMS: { latitude: 5.120277, longitude: -1.293839, radiusM: 150 },   // School of Medical Sciences
+  // CRT: the coordinates given were 5.5 km off campus; it stays on the campus-wide area until checked.
+};
+
+/**
+ * Gives UCC buildings their own points, once per version of the list above. Only buildings with no
+ * location or still on the campus-wide area are changed: points the office set are kept.
+ */
+async function applyBuildingLocations(db, name) {
+  if (name !== 'ucc') return 0;
+  const VERSION = 'ucc-locations-1';
+  if (await db.get("SELECT 1 FROM app_meta WHERE key = 'building_locations' AND value = ?", [VERSION])) return 0;
+  let n = 0;
+  for (const [code, p] of Object.entries(UCC_LOCATIONS)) {
+    const { changes } = await db.run(
+      `UPDATE buildings SET latitude = ?, longitude = ?, radius_m = ?
+       WHERE code = ? AND (latitude IS NULL OR longitude IS NULL OR radius_m >= 2000)`,
+      [p.latitude, p.longitude, p.radiusM, code],
+    );
+    n += changes;
+  }
+  await db.run(
+    `INSERT INTO app_meta (key, value) VALUES ('building_locations', ?)
+     ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+    [VERSION],
+  );
+  return n;
+}
+
 const CAMPUSES = {
   ucc: { buildings: UCC_BUILDINGS, rooms: UCC_ROOMS },
   demo: { buildings: DEMO_BUILDINGS, rooms: DEMO_ROOMS },
@@ -153,4 +195,4 @@ async function switchToCampus(db, name) {
   return out;
 }
 
-module.exports = { CAMPUSES, loadCampus, switchToCampus, applyCampusArea, UCC_AREA };
+module.exports = { CAMPUSES, loadCampus, switchToCampus, applyCampusArea, applyBuildingLocations, UCC_AREA, UCC_LOCATIONS };

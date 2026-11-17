@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('../config');
 const db = require('./index');
 const { seedReference, seedDemo } = require('./seed');
-const { switchToCampus, applyCampusArea } = require('./campus');
+const { switchToCampus, applyCampusArea, applyBuildingLocations } = require('./campus');
 
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const LOCK_ID = 72_710_001; // any fixed number; only this app uses it
@@ -65,6 +65,9 @@ function ensureReady() {
     // Every building starts with the campus-wide check-in area (once), until it gets its own point.
     const located = await applyCampusArea(x, config.campus);
     if (located) console.log(`[setup] gave ${located} buildings the campus-wide check-in area`);
+    // Then each building's own point, where known (never over a point the office set).
+    const pinned = await applyBuildingLocations(x, config.campus);
+    if (pinned) console.log(`[setup] set the location of ${pinned} buildings`);
     // Demo rooms kept for bookings that were still coming up: hide them once those are over.
     await x.run(
       `UPDATE rooms r SET is_active = false WHERE r.is_active AND r.code LIKE 'DEMO-%' AND NOT EXISTS (

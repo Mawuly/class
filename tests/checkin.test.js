@@ -310,3 +310,25 @@ describe('campus-wide check-in area', () => {
     assert.equal(geo.label(area, { lat: 5.1053, lng: -1.2466, accuracy: 20 }).state, 'far');
   });
 });
+
+describe('UCC building locations', () => {
+  beforeEach(resetDb);
+
+  test('known buildings get their own point once; points the office set are kept', async () => {
+    const { applyBuildingLocations, UCC_LOCATIONS } = require('../src/db/campus');
+    await db.run("DELETE FROM app_meta WHERE key = 'building_locations'");
+    await db.run("INSERT INTO buildings (code, name, latitude, longitude, radius_m) VALUES ('NLT', 'New Lecture Theatre', 5.115833, -1.290833, 3000), ('LT', 'Science LT', 5.2, -1.3, 120), ('SMS', 'Medical Sciences', NULL, NULL, 150)");
+    assert.equal(await applyBuildingLocations(db, 'demo'), 0);
+    assert.equal(await applyBuildingLocations(db, 'ucc'), 2);
+    const nlt = await db.get("SELECT latitude, longitude, radius_m FROM buildings WHERE code = 'NLT'");
+    assert.deepEqual(nlt, { latitude: UCC_LOCATIONS.NLT.latitude, longitude: UCC_LOCATIONS.NLT.longitude, radius_m: 200 });
+    assert.equal((await db.get("SELECT latitude FROM buildings WHERE code = 'SMS'")).latitude, UCC_LOCATIONS.SMS.latitude);
+    assert.equal((await db.get("SELECT latitude FROM buildings WHERE code = 'LT'")).latitude, 5.2, 'set by the office: kept');
+    assert.equal(await applyBuildingLocations(db, 'ucc'), 0, 'once');
+    // Every point is on campus (within 1.5 km of the centre).
+    const { distanceM } = require('../src/utils/geo');
+    for (const [code, p] of Object.entries(UCC_LOCATIONS)) {
+      assert.ok(distanceM({ lat: 5.115833, lng: -1.290833 }, { lat: p.latitude, lng: p.longitude }) < 1500, code);
+    }
+  });
+});
