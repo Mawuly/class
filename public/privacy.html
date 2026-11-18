@@ -10,35 +10,88 @@
   <main class="policy">
     <a class="back-link" href="/">Back to classrooms</a>
     <h1>Privacy policy</h1>
-    <p class="secondary">University of Cape Coast · Last updated 15 November 2026</p>
+    <p class="secondary">UniGuide · University of Cape Coast · Last updated 18 November 2026</p>
 
     <h2>What this service is</h2>
-    <p>UniGuide helps students and staff find free classrooms in the Sandwich Lecture Theatre, the New Lecture Theatre and the C. A. Ackah Theatre, and send booking requests to the timetable office.</p>
+    <p>UniGuide helps students and staff at the University of Cape Coast find free lecture rooms and auditoriums, book them,
+      get walking directions to them, and check in at the door. The timetable office uses it to publish the teaching
+      timetable, manage rooms and approve requests. This policy explains what personal information UniGuide uses and why.</p>
 
     <h2>Information we collect</h2>
     <ul>
-      <li>Account details: your name, email address, and optionally your index number, department and phone number.</li>
-      <li>Booking details: the room, date, time, course or activity, course code, supervisor and any note you add.</li>
-      <li>Technical records: sign-in sessions, password-reset attempts, and an audit record of booking and administrative actions.</li>
+      <li><strong>Account details:</strong> your name and email address, and, if you add them, your index number,
+        department and phone number. Your phone number is used only for password-reset codes, after you confirm it with a
+        code sent to it.</li>
+      <li><strong>Google sign-in:</strong> if you choose "Continue with Google", Google tells us your name, your email
+        address and a permanent Google account number, so we can find your account next time. We never see your Google
+        password, and we do not get access to your contacts, emails or files.</li>
+      <li><strong>Staff verification:</strong> if you ask for lecturer or timetable office access, your staff ID, position,
+        department and the offer or appointment letter you upload. The letter is deleted once the timetable office has
+        decided; only a fingerprint of the file (a SHA-256 hash) is kept to show which letter was checked.</li>
+      <li><strong>Bookings:</strong> the room, date and times, what it is for, course code, supervisor, number of people
+        and any note you add, plus whether it was approved, cancelled, checked in, checked out or released.</li>
+      <li><strong>Check-in:</strong> when and how you checked in (QR code or typed door code) and, for a timetable
+        class, which person checked the class in.</li>
+      <li><strong>Location at check-in:</strong> see "Location" below.</li>
+      <li><strong>Technical records:</strong> your sign-in session, password-reset and phone-confirmation attempts, and an
+        audit log of sign-ins, bookings and administrative actions, including the IP address they came from.</li>
     </ul>
 
+    <h2>Location</h2>
+    <p>UniGuide asks your phone for its location only when you check in to a booking, and only to see whether you are at
+      the room's building. Your phone's position is compared with the building's position and then discarded:
+      <strong>we never store your coordinates</strong>. We keep only a label (at the building, away from it, location not
+      shared, or building location not set) and, when you were away, the distance in metres and how precise your phone said
+      it was. If you do not share your location, or it is too imprecise, check-in may be refused while the timetable office
+      requires location; the message tells you why. UniGuide never tracks your location in the background.</p>
+
     <h2>Why we use it</h2>
-    <p>To create and secure your account, check room availability, route requests to the timetable office, prevent double bookings and misuse, and keep an accurate record of room use. We do not sell personal data or use it for advertising.</p>
+    <p>To create and secure your account; to show which rooms are free and prevent double bookings; to confirm that rooms
+      are actually used and free up rooms nobody turned up for; to let the timetable office decide requests, verify staff
+      and plan room use; to send password-reset codes; and to keep an accurate record of room use and administrative
+      decisions. We do not sell personal data or use it for advertising.</p>
 
     <h2>Who can see it</h2>
-    <p>You can see your own bookings. Timetable office staff can see requests, account details needed to decide them, and the audit log. Other users see only whether a room is free, not who booked it.</p>
+    <ul>
+      <li><strong>You</strong> see your own account, bookings and notifications.</li>
+      <li><strong>Other people</strong> see whether a room is free or booked. When signed in, they can also see the title
+        and course code of bookings on the room's door page and day board, and the lecturer named on the timetable, but
+        not who booked a room.</li>
+      <li><strong>The timetable office</strong> sees requests and the account details needed to decide them, staff
+        verification requests and letters (until deleted), statistics, check-ins flagged by the location check (with the
+        person's name and the distance), and the audit log.</li>
+    </ul>
+
+    <h2>Services we rely on</h2>
+    <ul>
+      <li><strong>Supabase</strong> hosts the database where accounts and bookings are stored.</li>
+      <li><strong>Vercel</strong> hosts the website and its server.</li>
+      <li><strong>Google</strong> handles sign-in if you choose "Continue with Google".</li>
+      <li><strong>Arkesel</strong> sends text messages with password-reset and phone-confirmation codes; it receives your
+        phone number and the message.</li>
+      <li><strong>An email provider</strong> sends password-reset codes by email; it receives your email address and the
+        message.</li>
+      <li><strong>Google Maps:</strong> the "Directions" links open Google Maps with the building as the destination. UniGuide
+        does not send your location to Google; Google Maps uses it under Google's own privacy policy if you allow it.</li>
+    </ul>
 
     <h2>Storage and retention</h2>
-    <p>Accounts and bookings are stored in the university's booking database. Passwords are stored only as salted hashes, and reset codes are stored only as hashes. Audit entries are append-only. Records are kept for as long as the account is active and for the period required by university policy.</p>
+    <p>Passwords are stored only as salted hashes. Reset and phone codes are stored only as hashes, expire after 10 minutes
+      and can be tried at most five times. Calendar subscription links are stored only as hashes. Staff letters are deleted
+      after the decision. Audit entries cannot be changed or deleted. Accounts and bookings are kept for as long as the
+      account is active and for the period required by university policy.</p>
 
-    <h2>Preview mode</h2>
-    <p>When the site is opened as a local preview without the booking database, accounts, bookings and closures are saved only in your browser's local storage. They are not sent to the university. Clearing site data or selecting "Reset bookings" removes them.</p>
-
-    <h2>Cookies</h2>
-    <p>A single session cookie keeps you signed in. It is required for booking and administration and is removed when you sign out or it expires.</p>
+    <h2>Cookies and browser storage</h2>
+    <p>A session cookie keeps you signed in; it is removed when you sign out or after eight hours. During "Continue with
+      Google" a second cookie lasts at most ten minutes, to check that the answer from Google belongs to the sign-in you
+      started. These cookies are needed for the service to work and are not used for tracking. The interface preview page
+      keeps its sample data only in your browser's local storage.</p>
 
     <h2>Your choices</h2>
-    <p>You may cancel a booking, correct your details, or ask the timetable office to close your account and delete your personal data, subject to record-keeping requirements. Password reset is available from the sign-in page.</p>
+    <p>You may cancel a booking, remove your phone number, correct your details, or ask the timetable office to close your
+      account and delete your personal data, subject to the university's record-keeping requirements. You can refuse to
+      share your location; check-in may then be unavailable while location is required. Password reset is available from
+      the sign-in page.</p>
 
     <h2>Contact</h2>
     <p>Questions about this policy or your data: the Timetable Office, University of Cape Coast.</p>
