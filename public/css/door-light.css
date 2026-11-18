@@ -1,0 +1,22 @@
+/* The door page (what a room's QR code opens) in the UniGuide look, like the main site.
+   Loaded after admin-spaces.css (the light theme) and brand.css. */
+
+/* Logotype in the main site's colours (navy "Uni", gold "Guide", white pin hole). */
+.is-door-light .wordmark { --wm-gold: #c58a12; --wm-hole: #fff; font-size: 19px; }
+.is-door-light .wordmark .wm__l:nth-child(n+4) { color: #c58a12; }
+.is-door-light .door-top { position: static; }
+
+/* The room's state, in the main site's colours: green free, gold hatch waiting, navy in use. */
+.is-door-light .door-status--free { background: #e5f5ee; border-color: #b8e2cd; color: #237b58; }
+.is-door-light .door-status--free .door-status__word { color: #1d6b4c; }
+.is-door-light .door-status--waiting {
+  border: 2px dashed #e0b452; color: #6e5112;
+  background: repeating-linear-gradient(-45deg, #fff4d9 0 3px, #fffaf0 3px 10px);
+}
+.is-door-light .door-status--waiting .door-status__word, .is-door-light .door-status--waiting b { color: #7a5a15; }
+.is-door-light .door-status--busy { background: #fff; border: 2px solid var(--navy); }
+.is-door-light .door-status--busy .door-status__word { color: var(--navy); }
+.is-door-light .door-status--closed { background: #eef2f7; color: #52657b; border-color: var(--line); }
+.is-door-light .door-status--closed .door-status__word { color: #52657b; }
+.is-door-light .door__code { color: var(--navy); }
+.is-door-light .door__flash { background: #e5f5ee; color: #1d6b4c; border: 1px solid #b8e2cd; }

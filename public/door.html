@@ -3,21 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#12161C">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4f6fa">
   <title>Room door · UniGuide</title>
   <meta name="description" content="Check in to your booking, see whether this room is free, and book it.">
   <link rel="icon" href="/favicon.png" type="image/png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/admin-spaces.css">
   <link rel="stylesheet" href="/css/brand.css">
+  <link rel="stylesheet" href="/css/door-light.css">
   <script type="module" src="/js/door.js"></script>
 </head>
-<body class="is-app is-door">
+<body class="is-app is-door is-door-light">
   <div class="stage" aria-hidden="true"><div class="stage__fallback"></div></div>
 
   <header class="topbar door-top">
-    <a class="brand" href="/"><span class="wordmark" aria-label="UniGuide"><span class="wm__l" aria-hidden="true">U</span><span class="wm__l" aria-hidden="true">n</span><span class="wm__l wm__l--pin" aria-hidden="true">ı</span><span class="wm__l" aria-hidden="true">G</span><span class="wm__l" aria-hidden="true">u</span><span class="wm__l" aria-hidden="true">i</span><span class="wm__l" aria-hidden="true">d</span><span class="wm__l" aria-hidden="true">e</span></span></a>
+    <a class="brand" href="/"><img class="crest crest--img" src="/media/ucc-crest.webp" alt="University of Cape Coast crest" width="33" height="38"><span class="brand__text"><span class="wordmark" aria-label="UniGuide"><span class="wm__l" aria-hidden="true">U</span><span class="wm__l" aria-hidden="true">n</span><span class="wm__l wm__l--pin" aria-hidden="true">ı</span><span class="wm__l" aria-hidden="true">G</span><span class="wm__l" aria-hidden="true">u</span><span class="wm__l" aria-hidden="true">i</span><span class="wm__l" aria-hidden="true">d</span><span class="wm__l" aria-hidden="true">e</span></span><small>UNIVERSITY OF CAPE COAST</small></span></a>
     <span class="clock mono" data-clock></span>
   </header>
 

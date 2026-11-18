@@ -44,3 +44,8 @@
   .sign .sign__code { font-size: 72pt; }
   .sign__doorcode { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* The UniGuide logotype (light version) in the navy band. */
+.sign__logo { display: block; width: 112px; height: auto; }
+.sign .sign__brand small { margin-top: 2px; }
+@media print { .sign__logo { width: 52mm; } }
