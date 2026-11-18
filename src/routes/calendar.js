@@ -20,7 +20,7 @@ function sendIcs(res, body, filename, { download = true, cache = 'no-store' } = 
 // address is what protects it. Unknown or revoked tokens get a plain 404.
 router.get('/feed/:file', async (req, res) => {
   const token = String(req.params.file).replace(/\.ics$/, '');
-  sendIcs(res, await calendar.feed(token, baseUrl(req)), 'lecture-rooms.ics', { download: false, cache: 'private, max-age=300' });
+  sendIcs(res, await calendar.feed(token, baseUrl(req)), 'uniguide.ics', { download: false, cache: 'private, max-age=300' });
 });
 
 router.get('/status', requireAuth, async (req, res) => res.json(await calendar.feedStatus(req.user)));

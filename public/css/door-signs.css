@@ -1,4 +1,4 @@
-/* Printable door signs in the UCC Spaces look (navy, gold, white), like the main site.
+/* Printable door signs in the UniGuide look (navy, gold, white), like the main site.
    Loaded after admin-spaces.css on /door-signs only. */
 
 .signs-page { padding: 28px var(--gutter) 60px; }

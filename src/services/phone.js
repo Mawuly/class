@@ -39,7 +39,7 @@ async function startVerification(user, input, { ip } = {}) {
     );
   });
   try {
-    await sms.send(phone, `Lecture Rooms: ${otp.spaced(code)} is your code to confirm this phone number. Valid ${CODE_MINUTES} min.`);
+    await sms.send(phone, `UniGuide: ${otp.spaced(code)} is your code to confirm this phone number. Valid ${CODE_MINUTES} min.`);
   } catch (err) {
     console.error('[sms] could not send a verification code:', err.message);
     throw new AppError(502, 'The text message could not be sent. Check the number, or try again in a few minutes.');

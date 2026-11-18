@@ -1,7 +1,7 @@
 {
-  "name": "lecture-room-booking",
+  "name": "uniguide",
   "version": "1.0.0",
-  "description": "Lecture Room Booking System: find free rooms, book without clashes, approve student requests.",
+  "description": "UniGuide: find, book and check in to lecture rooms at the University of Cape Coast",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/server.js",

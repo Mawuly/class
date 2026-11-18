@@ -6,7 +6,7 @@ const app = require('./app');
 
 if (require.main === module) {
   app.listen(config.port, () => {
-    console.log(`Lecture Rooms running at http://localhost:${config.port}`);
+    console.log(`UniGuide running at http://localhost:${config.port}`);
   });
 }
 

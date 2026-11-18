@@ -214,7 +214,7 @@ function laterList(d) {
 /* ---------- Page ------------------------------------------------------------------- */
 
 function render(d) {
-  document.title = `${d.room.code} · Room Door`;
+  document.title = `${d.room.code} · UniGuide`;
   const r = d.room;
   box.replaceChildren(
     h('header', { class: 'door__head' },

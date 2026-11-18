@@ -55,7 +55,7 @@ async function download(user, baseUrl) {
      ORDER BY b.date, b.start_time LIMIT 1000`,
     [user.id, today],
   );
-  return ics.calendar({ name: `Lecture Rooms: ${user.name}`, events: rows.map((b) => toEvent(b, baseUrl)) });
+  return ics.calendar({ name: `UniGuide: ${user.name}`, events: rows.map((b) => toEvent(b, baseUrl)) });
 }
 
 /** One booking, for "Add to calendar" after booking. Yours, or any booking for an admin. */
@@ -77,7 +77,7 @@ async function feed(token, baseUrl) {
     `SELECT ${COLUMNS} FROM ${FROM} WHERE b.user_id = ? AND b.parent_id IS NULL AND b.date >= ? ORDER BY b.date, b.start_time LIMIT 2000`,
     [user.id, t.addDays(t.localDate(), -60)],
   );
-  return ics.calendar({ name: `Lecture Rooms: ${user.name}`, events: rows.map((b) => toEvent(b, baseUrl)) });
+  return ics.calendar({ name: `UniGuide: ${user.name}`, events: rows.map((b) => toEvent(b, baseUrl)) });
 }
 
 async function feedStatus(user) {
@@ -101,7 +101,7 @@ async function createFeed(user, baseUrl, { ip } = {}) {
     url: https,
     webcal,
     google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
-    outlook: `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(https)}&name=${encodeURIComponent('Lecture Rooms')}`,
+    outlook: `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(https)}&name=${encodeURIComponent('UniGuide')}`,
   };
 }
 

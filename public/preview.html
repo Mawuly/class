@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>UCC Spaces · Interface preview</title>
+  <title>UniGuide · Interface preview</title>
   <meta name="theme-color" content="#092b54">
   <link rel="stylesheet" href="/css/spaces.css"><link rel="stylesheet" href="/css/brand.css">
   <script type="module" src="/js/preview.js"></script>
 <link rel="icon" href="/favicon.png" type="image/png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"></head>
 <body>
   <aside class="sidebar">
-    <a class="identity" href="/"><img class="crest crest--img" src="/media/ucc-crest.webp" alt="University of Cape Coast crest" width="45" height="52"><span>UCC Spaces<small>UNIVERSITY OF CAPE COAST</small></span></a>
+    <a class="identity" href="/"><img class="crest crest--img" src="/media/ucc-crest.webp" alt="University of Cape Coast crest" width="45" height="52"><span><span class="wordmark" aria-label="UniGuide"><span class="wm__l" aria-hidden="true">U</span><span class="wm__l" aria-hidden="true">n</span><span class="wm__l" aria-hidden="true">i</span><span class="wm__l" aria-hidden="true">G</span><span class="wm__l" aria-hidden="true">u</span><span class="wm__l" aria-hidden="true">i</span><span class="wm__l" aria-hidden="true">d</span><span class="wm__l" aria-hidden="true">e</span></span><small>UNIVERSITY OF CAPE COAST</small></span></a>
     <p class="nav-label">CAMPUS WORKSPACE</p>
     <nav aria-label="Workspace">
       <button class="nav-item selected" data-page="discover">â–¦ <span>Find a classroom</span></button>
@@ -47,7 +47,7 @@
           <aside class="admin-side"><div class="panel"><div class="panel-head"><h2>Booking window</h2></div><form id="settings-form" class="admin-form single"><label>Day opens<input type="time" id="set-open" step="1800" required></label><label>Last class ends<input type="time" id="set-close" step="1800" required></label><label>Longest class<select id="set-max"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4">4 hours</option><option value="5">5 hours</option><option value="6">6 hours</option></select></label><button type="submit" class="primary">Save window</button></form><p id="settings-error" class="error" role="alert"></p><p class="panel-note">Applies to every classroom in this preview. Whole-hour periods only.</p></div></aside>
         </div>
       </section>
-      <footer><span>University of Cape Coast</span><nav class="footer-links"><a href="/privacy.html">Privacy policy</a><a href="/terms.html">Terms of service</a></nav><span>UCC Spaces</span></footer>
+      <footer><span>University of Cape Coast</span><nav class="footer-links"><a href="/privacy.html">Privacy policy</a><a href="/terms.html">Terms of service</a></nav><span>UniGuide</span></footer>
     </main>
   </div>
   <dialog id="booking-dialog"><form id="booking-form"><button class="dialog-close" type="button" id="close-dialog" aria-label="Close booking form">Ã—</button><h2 id="booking-title">Request a room</h2><p id="booking-slot" class="secondary"></p><label>Course or activity<input id="purpose" required maxlength="100" placeholder="e.g. BUS 201 group revision"></label><label>Course code<input id="course-code" maxlength="20" placeholder="e.g. BUS 201"></label><label>Supervisor<input id="supervisor" maxlength="80" placeholder="e.g. Dr A. Mensah"></label><p class="form-note" id="booking-note">Whole-hour period. Approval required.</p><p id="booking-error" class="error" role="alert"></p><button type="submit" class="primary full">Send request</button></form></dialog>

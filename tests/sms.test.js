@@ -25,13 +25,13 @@ function arkesel(reply = { status: 'success', data: [{ recipient: '233241234567'
 
 test('sends one Arkesel v2 request: api-key header, sender, message, recipients', async () => {
   const calls = arkesel();
-  await sms.send('233241234567', 'Lecture Rooms: your code is 482 913.');
+  await sms.send('233241234567', 'UniGuide: your code is 482 913.');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://sms.arkesel.com/api/v2/sms/send');
   assert.equal(calls[0].init.method, 'POST');
   assert.equal(calls[0].init.headers['api-key'], 'test-key');
   assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
-  assert.deepEqual(calls[0].body, { sender: 'LectRooms', message: 'Lecture Rooms: your code is 482 913.', recipients: ['233241234567'] });
+  assert.deepEqual(calls[0].body, { sender: 'LectRooms', message: 'UniGuide: your code is 482 913.', recipients: ['233241234567'] });
 });
 
 test('ARKESEL_SANDBOX adds sandbox: true', async () => {

@@ -1,6 +1,6 @@
-# UCC Room Finder
+# UniGuide
 
-Find a free room at the University of Cape Coast, submit a booking without clashes, and let the timetable office approve student requests.
+Find a free lecture room at the University of Cape Coast, book it without clashes, get walking directions to it, and check in at the door.
 Node.js + Express API, vanilla JS frontend, PostgreSQL (Supabase), hosted on Vercel.
 
 ## Features

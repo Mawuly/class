@@ -6,3 +6,43 @@
 @media (max-width: 600px) { .identity .crest--img { width: 28px; height: 32px; } }
 .account-brand .identity { display: inline-flex; align-items: center; gap: 12px; }
 .account-brand .crest--img { width: 40px; height: 46px; background: #fff !important; border-radius: 6px; padding: 3px; }
+
+/* ---------- UniGuide wordmark: letters rise in one after another, then a gold line sweeps under ---------- */
+.wordmark {
+  position: relative; display: inline-flex; align-items: baseline; padding-bottom: 3px;
+  font-weight: 700; letter-spacing: -0.02em; white-space: nowrap;
+}
+.wm__l { display: inline-block; animation: wm-rise .55s cubic-bezier(.2, .8, .2, 1) both; }
+.wm__l:nth-child(1) { animation-delay: .05s; }
+.wm__l:nth-child(2) { animation-delay: .10s; }
+.wm__l:nth-child(3) { animation-delay: .15s; }
+.wm__l:nth-child(4) { animation-delay: .24s; }  /* "Guide" starts a beat later */
+.wm__l:nth-child(5) { animation-delay: .29s; }
+.wm__l:nth-child(6) { animation-delay: .34s; }
+.wm__l:nth-child(7) { animation-delay: .39s; }
+.wm__l:nth-child(8) { animation-delay: .44s; }
+/* "Guide" in the university gold, a shade darker so it reads on white. */
+.wm__l:nth-child(n+4) { color: #c58a12; }
+.wordmark::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, #f0c663, #c58a12); transform-origin: left; transform: scaleX(0);
+  animation: wm-line .6s .6s cubic-bezier(.2, .8, .2, 1) forwards;
+}
+/* Hovering the logo sweeps the line again. */
+a:hover > .wordmark::after, a:hover .wordmark::after, a:focus-visible .wordmark::after { animation: wm-line-again .6s cubic-bezier(.2, .8, .2, 1) forwards; }
+.crest--img { animation: wm-crest .7s cubic-bezier(.2, .8, .2, 1) both; }
+
+@keyframes wm-rise { from { opacity: 0; transform: translateY(.45em); } to { opacity: 1; transform: none; } }
+@keyframes wm-line { to { transform: scaleX(1); } }
+@keyframes wm-line-again { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); } }
+@keyframes wm-crest { from { opacity: 0; transform: translateY(-6px) scale(.92); } to { opacity: 1; transform: none; } }
+
+/* On the dark door page and the navy sign-in panel, "Uni" stays light and "Guide" stays gold. */
+.is-door .wordmark .wm__l:nth-child(n+4), .account-brand .wordmark .wm__l:nth-child(n+4) { color: #f0c663; }
+
+/* People who turn animations off see the finished logo straight away. */
+@media (prefers-reduced-motion: reduce) {
+  .wm__l, .crest--img { animation: none; }
+  .wordmark::after { animation: none; transform: scaleX(1); }
+  a:hover .wordmark::after { animation: none; }
+}

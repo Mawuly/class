@@ -33,7 +33,7 @@ function message(name, code) {
   const text = [
     `Hello ${name.split(' ')[0]},`,
     '',
-    `Your Lecture Rooms code is ${spaced}`,
+    `Your UniGuide code is ${spaced}`,
     '',
     `Enter it on the reset page to choose a new password. It works once, for ${CODE_MINUTES} minutes.`,
     '',
@@ -42,14 +42,14 @@ function message(name, code) {
   ].join('\n');
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#12161C;font-family:Arial,sans-serif;color:#EDE6DA">
 <div style="max-width:420px;margin:0 auto">
-<p style="font-family:Georgia,serif;font-size:22px;margin:0 0 20px">Lecture Rooms</p>
+<p style="font-family:Georgia,serif;font-size:22px;margin:0 0 20px">UniGuide</p>
 <p style="margin:0 0 12px">Hello ${name.split(' ')[0].replace(/[<>&"]/g, '')},</p>
 <p style="margin:0 0 8px">Your code to reset your password:</p>
 <p style="font-family:'Courier New',monospace;font-size:34px;letter-spacing:6px;margin:0 0 16px;padding:14px 18px;background:#EDE6DA;color:#12161C;border-radius:6px;text-align:center">${spaced}</p>
 <p style="margin:0 0 16px;font-size:14px">It works once, for ${CODE_MINUTES} minutes.</p>
 <p style="margin:0;font-size:12px;opacity:.7">If you didn't ask for this, ignore this email: your password hasn't changed. Never share this code; the timetable office will never ask for it.</p>
 </div></body></html>`;
-  return { subject: `Your Lecture Rooms code: ${spaced}`, text, html };
+  return { subject: `Your UniGuide code: ${spaced}`, text, html };
 }
 
 /**
@@ -116,7 +116,7 @@ async function requestCode(email, { ip } = {}) {
   try {
     if (channel === 'sms') {
       // Plain characters and under 160, so it arrives as one SMS.
-      await sms.send(user.phone, `Lecture Rooms: your password reset code is ${otp.spaced(code)}. Valid ${CODE_MINUTES} min. Never share it.`);
+      await sms.send(user.phone, `UniGuide: your password reset code is ${otp.spaced(code)}. Valid ${CODE_MINUTES} min. Never share it.`);
     } else {
       await mail.send({ to: user.email, ...message(user.name, code) });
     }

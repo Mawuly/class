@@ -1239,7 +1239,7 @@ describe('password reset by emailed code', () => {
     assert.deepEqual(unknown.body, known.body);
     assert.equal(mail.outbox.length, 1);
     assert.equal(mail.outbox[0].to, EMAIL);
-    assert.match(mail.outbox[0].subject, /^Your Lecture Rooms code: \d{3} \d{3}$/);
+    assert.match(mail.outbox[0].subject, /^Your UniGuide code: \d{3} \d{3}$/);
     assert.match(mail.outbox[0].html, /\d{3} \d{3}/);
     // Only a keyed hash is stored
     const row = await db.get('SELECT code_hash FROM password_resets');
@@ -1392,7 +1392,7 @@ describe('phone numbers and text-message codes', () => {
     await agent().post('/api/auth/forgot-password').send({ email: EMAIL });
     assert.equal(mail.outbox.length, 0);
     assert.equal(sms.outbox.length, 1);
-    assert.match(sms.outbox[0].message, /^Lecture Rooms: your password reset code is \d{3} \d{3}\. Valid 10 min\. Never share it\.$/);
+    assert.match(sms.outbox[0].message, /^UniGuide: your password reset code is \d{3} \d{3}\. Valid 10 min\. Never share it\.$/);
     assert.ok(sms.outbox[0].message.length <= 160);
     assert.ok(/^[\x20-\x7e]+$/.test(sms.outbox[0].message), 'plain characters only, so it is one SMS');
     const a = agent();

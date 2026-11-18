@@ -6,7 +6,7 @@ function route() {
   const selected = forms.find(f => f.dataset.accountForm === name) || forms[0];
   forms.forEach(f => { f.hidden = f !== selected; });
   error.textContent = ''; message.textContent = '';
-  document.title = `${selected.querySelector('h1').textContent} · UCC Spaces`;
+  document.title = `${selected.querySelector('h1').textContent} · UniGuide`;
 }
 window.addEventListener('hashchange', route); route();
 document.querySelectorAll('[data-toggle-password]').forEach(b => b.addEventListener('click', () => {

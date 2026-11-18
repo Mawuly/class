@@ -1,4 +1,4 @@
-// UCC Spaces: the public site. Rooms come from the API, sign-in is the university account,
+// UniGuide: the public site. Rooms come from the API, sign-in is the university account,
 // and every booking is written to the database. Admin tools live at /admin.
 import { api } from './api.js';
 import { currentPosition, locationNote } from './location.js';
