@@ -2,6 +2,7 @@
 // and every booking is written to the database. Admin tools live at /admin.
 import { api } from './api.js';
 import { currentPosition, locationNote } from './location.js';
+import { showProfile } from './profile.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -155,7 +156,7 @@ function renderAccount() {
     return;
   }
   box.append(
-    el('span', 'account-name', `${state.user.name} · ${ROLE[state.user.role] || state.user.role}`),
+    button(`${state.user.name} · ${ROLE[state.user.role] || state.user.role}`, 'account-name text-button', () => openPage('profile')),
     button('Sign out', 'text-button', signOut),
   );
 }
@@ -627,15 +628,18 @@ async function checkOutBooking(b) {
 
 /* ---------- Pages and filters ------------------------------------------------------ */
 
-const PAGES = { discover: 'Find a classroom', bookings: 'My bookings' };
+const PAGES = { discover: 'Find a classroom', bookings: 'My bookings', profile: 'Profile' };
 function openPage(name) {
   if (!PAGES[name]) return;
-  if (name === 'bookings' && !requireAccount(() => openPage(name))) return;
+  if ((name === 'bookings' || name === 'profile') && !requireAccount(() => openPage(name))) return;
   for (const n of Object.keys(PAGES)) $(`${n}-page`).hidden = n !== name;
   document.querySelectorAll('[data-page]').forEach((b) => b.classList.toggle('selected', b.dataset.page === name));
   $('page-label').textContent = PAGES[name];
   window.scrollTo({ top: 0 });
   if (name === 'bookings') loadBookings();
+  if (name === 'profile') {
+    showProfile({ toast, onUserChange: (user) => { state.user = { ...state.user, ...user }; renderAccount(); } });
+  }
 }
 document.querySelectorAll('[data-page]').forEach((btn) => btn.addEventListener('click', () => openPage(btn.dataset.page)));
 

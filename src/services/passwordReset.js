@@ -153,7 +153,7 @@ async function resetWithCode(email, code, newPassword, { ip } = {}) {
       return { error: attempts >= MAX_ATTEMPTS ? 'Too many wrong codes. Ask for a new code.' : WRONG };
     }
     const user = await x.get(
-      `UPDATE users SET password_hash = ?, must_change_password = false, temp_password_expires_at = NULL,
+      `UPDATE users SET password_hash = ?, has_password = true, must_change_password = false, temp_password_expires_at = NULL,
               session_version = session_version + 1, password_changed_at = now()
        WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version,
                  phone, phone_verified_at`,

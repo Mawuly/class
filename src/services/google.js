@@ -116,7 +116,7 @@ async function signIn(identity, { ip } = {}) {
     if (!user) {
       const role = config.adminEmails.includes(email) ? 'admin' : 'student';
       user = await x.get(
-        `INSERT INTO users (name, email, password_hash, role, google_sub) VALUES (?, ?, ?, ?, ?) RETURNING ${USER_COLUMNS}`,
+        `INSERT INTO users (name, email, password_hash, role, google_sub, has_password) VALUES (?, ?, ?, ?, ?, false) RETURNING ${USER_COLUMNS}`,
         [name.length >= 2 ? name : email, email, await unusablePassword(), role, sub],
       );
       created = true;
@@ -127,7 +127,7 @@ async function signIn(identity, { ip } = {}) {
     } else if (!user.google_sub) {
       if (!user.is_active) throw new AppError(403, 'This account has been deactivated. Contact the timetable office.');
       user = await x.get(
-        `UPDATE users SET google_sub = ?, password_hash = ?, must_change_password = false, temp_password_expires_at = NULL,
+        `UPDATE users SET google_sub = ?, password_hash = ?, has_password = false, must_change_password = false, temp_password_expires_at = NULL,
                 session_version = session_version + 1, password_changed_at = now()
          WHERE id = ? RETURNING ${USER_COLUMNS}`,
         [sub, await unusablePassword(), user.id],

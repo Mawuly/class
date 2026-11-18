@@ -329,3 +329,35 @@ describe('event rooms: bookable overnight', () => {
     assert.deepEqual((await parts(id)).map((p) => p.status), ['released', 'released']);
   });
 });
+
+describe('profile page', () => {
+  beforeEach(resetDb);
+
+  test('details can be edited (not email or role); activity summary; sign out other devices', async () => {
+    const a = await signedIn('kofi@campus.test');
+    const other = agent();
+    await other.post('/api/auth/login').send({ email: 'kofi@campus.test', password: require('./helpers').PASSWORD });
+    await book(a, 'LIB-S1', tomorrow(), '10:00', '12:00', { category: 'study', attendees: 2 });
+    const p = (await a.get('/api/auth/profile')).body;
+    assert.deepEqual([p.user.role, p.user.hasPassword, p.user.googleLinked, p.activity.upcoming], ['student', true, false, 1]);
+    const res = await a.patch('/api/auth/profile').send({ name: '  Kofi   Asante ', department: 'Computer Science', indexNumber: 'PS/CSC/21/0001', email: 'x@y.z', role: 'admin' });
+    assert.deepEqual([res.body.user.name, res.body.user.department, res.body.user.indexNumber, res.body.user.email, res.body.user.role],
+      ['Kofi Asante', 'Computer Science', 'PS/CSC/21/0001', 'kofi@campus.test', 'student']);
+    assert.match((await a.patch('/api/auth/profile').send({ name: 'K' })).body.error, /full name/);
+    assert.deepEqual(Object.keys((await db.get("SELECT details FROM audit_log WHERE action = 'user.update_self'")).details).sort(), ['department', 'index_number', 'name']);
+    assert.equal((await a.post('/api/auth/sign-out-others')).status, 200);
+    assert.equal((await a.get('/api/auth/me')).status, 200, 'this device stays signed in');
+    assert.equal((await other.get('/api/auth/me')).status, 401, 'the other device is signed out');
+  });
+
+  test('a Google-only account sets a password without a current one', async () => {
+    const a = await signedIn('esi@campus.test');
+    await db.run('UPDATE users SET has_password = false WHERE id = ?', [a.user.id]);
+    assert.equal((await a.get('/api/auth/profile')).body.user.hasPassword, false);
+    const res = await a.post('/api/auth/change-password').send({ newPassword: 'NewPass2026' });
+    assert.equal(res.status, 200);
+    assert.equal((await db.get('SELECT has_password FROM users WHERE id = ?', [a.user.id])).has_password, true);
+    assert.equal((await agent().post('/api/auth/login').send({ email: 'esi@campus.test', password: 'NewPass2026' })).status, 200);
+    assert.equal((await a.post('/api/auth/change-password').send({ newPassword: 'Another2026' })).status, 400, 'now the current password is needed');
+  });
+});

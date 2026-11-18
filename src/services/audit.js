@@ -40,6 +40,8 @@ function describe(e) {
     'auth.login': ['signed in', d.via === 'google' ? 'with Google' : ''],
     'auth.login_failed': [d.reason === 'temporary password expired' ? 'tried an expired temporary password' : 'failed to sign in',
       d.email ? `as ${d.email}` : ''],
+    'user.update_self': ['updated their profile', Object.keys(d).join(', ').replace('index_number', 'index number')],
+    'auth.sign_out_others': ['signed out their other devices'],
     'auth.register': ['created an account', d.via === 'google' ? 'with Google' : ''],
     'auth.google_linked': ['linked their Google account', 'old password no longer works'],
     'auth.change_password': ['changed their password', d.after ? 'after a reset' : ''],

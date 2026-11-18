@@ -410,6 +410,10 @@ ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS extended_hours boolean NOT NULL DE
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS parent_id integer REFERENCES bookings(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_bookings_parent ON bookings (parent_id) WHERE parent_id IS NOT NULL;
 
+-- Profile page (schema version 18): whether the account has a password someone chose. Accounts made
+-- with Google, or joined to Google, have none until the person sets one on their profile.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS has_password boolean NOT NULL DEFAULT true;
+
 -- Which version of this file the database has been brought up to (see db/setup.js).
 CREATE TABLE IF NOT EXISTS app_meta (
   key   text PRIMARY KEY,

@@ -169,7 +169,7 @@ async function resetPassword(admin, id, { ip } = {}) {
   const hash = await bcrypt.hash(temp, config.bcryptCost);
   return db.tx(async (x) => {
     const user = await x.get(
-      `UPDATE users SET password_hash = ?, must_change_password = true,
+      `UPDATE users SET password_hash = ?, has_password = true, must_change_password = true,
               temp_password_expires_at = now() + make_interval(hours => ?),
               session_version = session_version + 1, password_changed_at = now()
        WHERE id = ? RETURNING id, name, email, is_active, temp_password_expires_at`,

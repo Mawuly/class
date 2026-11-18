@@ -118,8 +118,9 @@ router.get('/me', requireAuth, (req, res) => {
 
 router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const row = await db.get('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
-  if (typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword.slice(0, 128), row.password_hash))) {
+  const row = await db.get('SELECT password_hash, has_password FROM users WHERE id = ?', [req.user.id]);
+  // An account made with Google has no password yet: it sets one without a current password.
+  if (row.has_password && (typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword.slice(0, 128), row.password_hash)))) {
     throw new AppError(400, 'Your current password is incorrect');
   }
   const pwError = passwordProblem(newPassword);
@@ -127,7 +128,7 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
   if (newPassword === currentPassword) throw new AppError(400, 'Choose a password different from the current one');
   // Bumping the session version signs out every other device; this one gets a fresh cookie below.
   const user = await db.get(
-    `UPDATE users SET password_hash = ?, must_change_password = false, temp_password_expires_at = NULL,
+    `UPDATE users SET password_hash = ?, has_password = true, must_change_password = false, temp_password_expires_at = NULL,
             session_version = session_version + 1, password_changed_at = now()
      WHERE id = ? RETURNING id, name, email, role, department, index_number, must_change_password, session_version,
                  phone, phone_verified_at`,
@@ -145,6 +146,69 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
  */
 const codesOn = () => sms.enabled() || mail.enabled();
 const channels = () => ({ sms: sms.enabled(), email: mail.enabled() });
+
+/* ---------- Profile ----------------------------------------------------------------- */
+
+// The profile page: your details, how you sign in, and a summary of your bookings.
+router.get('/profile', requireAuth, async (req, res) => {
+  const u = await db.get(
+    `SELECT id, name, email, role, department, index_number, created_at, has_password, google_sub IS NOT NULL AS google,
+            phone, phone_verified_at
+     FROM users WHERE id = ?`,
+    [req.user.id],
+  );
+  const since = new Date(Date.now() - 120 * 86_400_000);
+  const activity = await db.get(
+    `SELECT count(*) FILTER (WHERE status IN ('approved', 'released'))::int AS bookings,
+            coalesce(sum(extract(epoch FROM end_time - start_time) / 3600) FILTER (WHERE status = 'approved'), 0)::float AS hours,
+            count(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in,
+            count(*) FILTER (WHERE status = 'released')::int AS released,
+            count(*) FILTER (WHERE status IN ('pending', 'approved') AND date >= current_date)::int AS upcoming
+     FROM bookings WHERE user_id = ? AND kind = 'booking' AND date >= ?::date`,
+    [req.user.id, since.toISOString().slice(0, 10)],
+  );
+  // Overnight bookings: add the hours after midnight, which are stored on the next date.
+  const extra = await db.get(
+    `SELECT coalesce(sum(extract(epoch FROM c.end_time - c.start_time) / 3600), 0)::float AS hours
+     FROM bookings c JOIN bookings p ON p.id = c.parent_id
+     WHERE p.user_id = ? AND c.status = 'approved' AND p.date >= ?::date`,
+    [req.user.id, since.toISOString().slice(0, 10)],
+  );
+  res.json({
+    user: {
+      ...publicUser(u), createdAt: u.created_at, googleLinked: u.google, hasPassword: u.has_password,
+    },
+    activity: { ...activity, hours: Math.round((activity.hours + extra.hours) * 10) / 10, sinceDays: 120 },
+  });
+});
+
+// Your own details. Email and role are not changed here: email is how you sign in, and roles are
+// granted by the timetable office.
+router.patch('/profile', requireAuth, async (req, res) => {
+  const name = req.body?.name === undefined ? req.user.name : String(req.body.name).trim().replace(/\s+/g, ' ');
+  const department = req.body?.department === undefined ? req.user.department : (String(req.body.department).trim().slice(0, 80) || null);
+  const indexNumber = req.body?.indexNumber === undefined ? req.user.index_number : (String(req.body.indexNumber).trim().slice(0, 30) || null);
+  if (name.length < 2 || name.length > 80) throw new AppError(400, 'Enter your full name (2 to 80 characters)');
+  const changed = Object.fromEntries([['name', name, req.user.name], ['department', department, req.user.department],
+    ['index_number', indexNumber, req.user.index_number]].filter(([, a, b]) => a !== b).map(([k, a, b]) => [k, { from: b, to: a }]));
+  const user = await db.get(
+    `UPDATE users SET name = ?, department = ?, index_number = ? WHERE id = ?
+     RETURNING id, name, email, role, department, index_number, must_change_password, phone, phone_verified_at`,
+    [name, department, indexNumber, req.user.id],
+  );
+  if (Object.keys(changed).length) {
+    await audit({ userId: req.user.id, action: 'user.update_self', entity: 'user', entityId: req.user.id, details: changed, ip: req.ip });
+  }
+  res.json({ user: publicUser(user) });
+});
+
+// Signs out every other device (phones, lab computers) and keeps this one signed in.
+router.post('/sign-out-others', requireAuth, async (req, res) => {
+  const user = await db.get('UPDATE users SET session_version = session_version + 1 WHERE id = ? RETURNING id, session_version', [req.user.id]);
+  await audit({ userId: req.user.id, action: 'auth.sign_out_others', entity: 'user', entityId: req.user.id, ip: req.ip });
+  setSession(res, user);
+  res.json({ ok: true });
+});
 
 router.post('/forgot-password', authLimiter, async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase().slice(0, 254);
