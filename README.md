@@ -309,3 +309,13 @@ event rooms are in view, and each room card says whether that room is open then.
 A booking past midnight is stored as two linked rows (until 24:00, then from 00:00 the next date), so
 every clash rule covers both; it is shown, cancelled, checked in, released and exported to calendars as
 one booking.
+
+
+## Logo
+
+The UniGuide logotype is the name itself: "Uni" in navy and "Guide" in UCC gold, with a map pin for
+the dot of the "i" and a route arrow underneath. On the site it is live text that animates in (letters
+rise, the pin drops, the route draws); it doesn't move for people who turn animations off. For
+slides and documents use `public/media/uniguide-logo.svg` / `.png` (for light backgrounds) or
+`uniguide-logo-dark.svg` / `.png` (for navy or dark backgrounds). They are drawn from IBM Plex Sans with
+`tools/make-logo.py`, so they look the same everywhere without the font.

@@ -46,3 +46,32 @@ a:hover > .wordmark::after, a:hover .wordmark::after, a:focus-visible .wordmark:
   .wordmark::after { animation: none; transform: scaleX(1); }
   a:hover .wordmark::after { animation: none; }
 }
+
+/* ---------- UniGuide logotype: a map pin for the dot of the "i", and a route arrow under the name ---------- */
+.wordmark { --wm-gold: #c58a12; --wm-hole: #fff; }
+.is-door .wordmark { --wm-hole: #12161c; --wm-gold: #f0c663; }
+.account-brand .wordmark { --wm-hole: #092b54; --wm-gold: #f0c663; }
+.wm__l--pin { position: relative; }
+.wm__l--pin::before {
+  content: ''; position: absolute; left: 50%; top: -.06em; width: .34em; height: .34em;
+  border-radius: 50% 50% 50% 0; transform: translateX(-50%) rotate(-45deg);
+  background: radial-gradient(circle at 50% 50%, var(--wm-hole) 0 .055em, transparent .065em), var(--wm-gold);
+  animation: wm-pin .55s .62s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+/* The route line ends in an arrowhead that appears as the line finishes drawing. */
+.wordmark::before {
+  content: ''; position: absolute; right: -.02em; bottom: -.16em; width: .26em; height: .26em;
+  border-top: 2px solid var(--wm-gold); border-right: 2px solid var(--wm-gold); transform: rotate(45deg);
+  opacity: 0; animation: wm-arrow .25s 1.12s ease-out forwards;
+}
+.wordmark::after { right: .08em; }
+@keyframes wm-pin {
+  0% { opacity: 0; transform: translate(-50%, -.7em) rotate(-45deg); }
+  100% { opacity: 1; transform: translateX(-50%) rotate(-45deg); }
+}
+@keyframes wm-arrow { from { opacity: 0; transform: translateX(-.2em) rotate(45deg); } to { opacity: 1; transform: rotate(45deg); } }
+a:hover .wordmark::before { animation: wm-arrow .25s .45s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .wm__l--pin::before { animation: none; }
+  .wordmark::before { animation: none; opacity: 1; }
+}
